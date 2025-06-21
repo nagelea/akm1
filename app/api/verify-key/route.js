@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 
+// API routes need service key, not the shared client
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_KEY
