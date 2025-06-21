@@ -1,7 +1,7 @@
 -- API密钥泄露监控系统数据库Schema
 -- 在Supabase中手动执行此SQL文件
 
--- 密钥记录表
+-- 密钥记录表 - 公共信息
 CREATE TABLE IF NOT EXISTS leaked_keys (
   id SERIAL PRIMARY KEY,
   key_type VARCHAR(50) NOT NULL,                -- openai, google, anthropic等
@@ -15,11 +15,42 @@ CREATE TABLE IF NOT EXISTS leaked_keys (
   repo_language VARCHAR(20) DEFAULT 'unknown',  -- JavaScript, Python等
   repo_name VARCHAR(200),                       -- 仓库全名 owner/repo
   file_path VARCHAR(500),                       -- 文件路径
-  context_preview TEXT,                         -- 代码上下文片段
+  context_preview TEXT,                         -- 代码上下文片段(已脱敏)
   severity VARCHAR(10) DEFAULT 'medium',        -- high, medium, low
   confidence VARCHAR(10) DEFAULT 'medium',      -- high, medium, low - 检测置信度
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- 敏感数据表 - 仅管理员可访问
+CREATE TABLE IF NOT EXISTS leaked_keys_sensitive (
+  id SERIAL PRIMARY KEY,
+  key_id INTEGER REFERENCES leaked_keys(id) ON DELETE CASCADE,
+  encrypted_key TEXT NOT NULL,                  -- 加密后的完整密钥
+  raw_context TEXT,                            -- 未脱敏的原始上下文
+  github_url TEXT,                             -- 直接访问链接
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- 管理员用户表
+CREATE TABLE IF NOT EXISTS admin_users (
+  id SERIAL PRIMARY KEY,
+  email VARCHAR(255) UNIQUE NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  role VARCHAR(20) DEFAULT 'viewer',           -- admin, viewer
+  last_login TIMESTAMP,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- 访问日志表
+CREATE TABLE IF NOT EXISTS access_logs (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER REFERENCES admin_users(id),
+  action VARCHAR(50) NOT NULL,                 -- view_key, verify_key, export_data
+  key_id INTEGER REFERENCES leaked_keys(id),
+  ip_address INET,
+  user_agent TEXT,
+  created_at TIMESTAMP DEFAULT NOW()
 );
 
 -- 每日统计表（预聚合数据）
@@ -62,18 +93,57 @@ CREATE TRIGGER update_daily_stats_updated_at BEFORE UPDATE ON daily_stats
 ALTER TABLE leaked_keys ENABLE ROW LEVEL SECURITY;
 ALTER TABLE daily_stats ENABLE ROW LEVEL SECURITY;
 
--- 允许匿名用户只读访问
+-- 公共表：允许匿名用户只读访问
 CREATE POLICY "Allow anonymous read access" ON leaked_keys
     FOR SELECT USING (true);
 
 CREATE POLICY "Allow anonymous read access" ON daily_stats
     FOR SELECT USING (true);
 
--- 只允许服务角色写入
+-- 敏感数据表：严格权限控制
+CREATE POLICY "Admin only access to sensitive data" ON leaked_keys_sensitive
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM admin_users 
+            WHERE email = auth.jwt() ->> 'email' 
+            AND role = 'admin'
+        )
+    );
+
+-- 管理员表：只允许管理员查看
+CREATE POLICY "Admin user management" ON admin_users
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM admin_users 
+            WHERE email = auth.jwt() ->> 'email' 
+            AND role = 'admin'
+        )
+    );
+
+-- 访问日志：管理员可查看
+CREATE POLICY "Admin access logs" ON access_logs
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM admin_users 
+            WHERE email = auth.jwt() ->> 'email' 
+            AND role IN ('admin', 'viewer')
+        )
+    );
+
+-- 服务角色全权限
 CREATE POLICY "Allow service role full access" ON leaked_keys
     FOR ALL USING (auth.role() = 'service_role');
 
 CREATE POLICY "Allow service role full access" ON daily_stats
+    FOR ALL USING (auth.role() = 'service_role');
+
+CREATE POLICY "Allow service role full access" ON leaked_keys_sensitive
+    FOR ALL USING (auth.role() = 'service_role');
+
+CREATE POLICY "Allow service role full access" ON admin_users
+    FOR ALL USING (auth.role() = 'service_role');
+
+CREATE POLICY "Allow service role full access" ON access_logs
     FOR ALL USING (auth.role() = 'service_role');
 
 -- 创建视图用于API查询

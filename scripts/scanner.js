@@ -2,6 +2,10 @@ const { Octokit } = require('@octokit/rest');
 const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
 
+// 加密配置
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'default-key-change-in-production';
+const ALGORITHM = 'aes-256-gcm';
+
 // API密钥检测模式 - 扩展版
 const KEY_PATTERNS = {
   openai: {
@@ -258,10 +262,14 @@ class APIKeyScanner {
 
     // 提取上下文信息
     const context = this.extractContext(key, content);
+    const rawContext = this.extractRawContext(key, content);
     const severity = this.assessSeverity(fileInfo.path, content, keyConfig.confidence);
     
-    // 保存到数据库
-    const { error } = await this.supabase.from('leaked_keys').insert({
+    // 生成GitHub直链
+    const githubUrl = `https://github.com/${fileInfo.repository.full_name}/blob/main/${fileInfo.path}`;
+    
+    // 保存公共信息到主表
+    const { data: keyRecord, error } = await this.supabase.from('leaked_keys').insert({
       key_type: type,
       key_preview: this.maskKey(key),
       key_hash: keyHash,
@@ -272,7 +280,18 @@ class APIKeyScanner {
       repo_name: fileInfo.repository.full_name,
       file_path: fileInfo.path,
       confidence: keyConfig.confidence
-    });
+    }).select().single();
+
+    if (!error && keyRecord) {
+      // 加密并保存敏感信息
+      const encryptedKey = this.encryptData(key);
+      await this.supabase.from('leaked_keys_sensitive').insert({
+        key_id: keyRecord.id,
+        encrypted_key: encryptedKey,
+        raw_context: rawContext,
+        github_url: githubUrl
+      });
+    }
 
     if (!error) {
       console.log(`🔑 Found new ${keyConfig.name} key in ${fileInfo.repository.full_name}/${fileInfo.path} [${severity}] (${keyConfig.confidence} confidence)`);
@@ -429,6 +448,44 @@ class APIKeyScanner {
         by_status: byStatus,
         by_severity: bySeverity
       });
+  }
+
+  extractRawContext(key, content) {
+    const keyIndex = content.indexOf(key);
+    const start = Math.max(0, keyIndex - 100);
+    const end = Math.min(content.length, keyIndex + key.length + 100);
+    return content.substring(start, end);
+  }
+
+  encryptData(text) {
+    const key = crypto.scryptSync(ENCRYPTION_KEY, 'salt', 32);
+    const iv = crypto.randomBytes(16);
+    const cipher = crypto.createCipherGCM(ALGORITHM, key, iv);
+    
+    let encrypted = cipher.update(text, 'utf8', 'hex');
+    encrypted += cipher.final('hex');
+    
+    const authTag = cipher.getAuthTag();
+    
+    return JSON.stringify({
+      encrypted: encrypted,
+      iv: iv.toString('hex'),
+      authTag: authTag.toString('hex')
+    });
+  }
+
+  decryptData(encryptedData) {
+    const data = JSON.parse(encryptedData);
+    const key = crypto.scryptSync(ENCRYPTION_KEY, 'salt', 32);
+    const iv = Buffer.from(data.iv, 'hex');
+    const decipher = crypto.createDecipherGCM(ALGORITHM, key, iv);
+    
+    decipher.setAuthTag(Buffer.from(data.authTag, 'hex'));
+    
+    let decrypted = decipher.update(data.encrypted, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    
+    return decrypted;
   }
 
   sleep(ms) {
