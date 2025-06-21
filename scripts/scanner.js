@@ -96,51 +96,64 @@ class APIKeyScanner {
   }
 
   async scanRecent() {
-    const today = new Date().toISOString().split('T')[0];
+    const scanType = process.env.SCAN_TYPE || 'recent';
+    let dateFilter = '';
+    
+    if (scanType === 'recent') {
+      // 最近1天
+      const today = new Date().toISOString().split('T')[0];
+      dateFilter = `created:>${today}`;
+    } else if (scanType === 'full') {
+      // 最近7天的全面扫描
+      const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      dateFilter = `created:>${weekAgo}`;
+    }
+    
+    console.log(`📅 Scan mode: ${scanType} (${dateFilter})`);
     
     // 使用更精确的正则表达式组合搜索
     const queries = [
       // OpenAI 密钥 - 多种文件类型
-      `"sk-" extension:js created:>${today}`,
-      `"sk-" extension:py created:>${today}`,
-      `"sk-" extension:env created:>${today}`,
-      `"sk-" extension:ts created:>${today}`,
+      `"sk-" extension:js ${dateFilter}`,
+      `"sk-" extension:py ${dateFilter}`,
+      `"sk-" extension:env ${dateFilter}`,
+      `"sk-" extension:ts ${dateFilter}`,
       
       // Anthropic Claude 密钥
-      `"sk-ant-" extension:js created:>${today}`,
-      `"sk-ant-" extension:py created:>${today}`,
-      `"sk-ant-" extension:env created:>${today}`,
+      `"sk-ant-" extension:js ${dateFilter}`,
+      `"sk-ant-" extension:py ${dateFilter}`,
+      `"sk-ant-" extension:env ${dateFilter}`,
       
       // Google AI 密钥
-      `"AIza" extension:js created:>${today}`,
-      `"AIza" extension:py created:>${today}`,
-      `"AIza" extension:env created:>${today}`,
-      `"AIza" extension:json created:>${today}`,
+      `"AIza" extension:js ${dateFilter}`,
+      `"AIza" extension:py ${dateFilter}`,
+      `"AIza" extension:env ${dateFilter}`,
+      `"AIza" extension:json ${dateFilter}`,
       
       // HuggingFace 密钥
-      `"hf_" extension:py created:>${today}`,
-      `"hf_" extension:js created:>${today}`,
-      `"hf_" extension:ipynb created:>${today}`,
+      `"hf_" extension:py ${dateFilter}`,
+      `"hf_" extension:js ${dateFilter}`,
+      `"hf_" extension:ipynb ${dateFilter}`,
       
       // Replicate 密钥
-      `"r8_" extension:py created:>${today}`,
-      `"r8_" extension:js created:>${today}`,
+      `"r8_" extension:py ${dateFilter}`,
+      `"r8_" extension:js ${dateFilter}`,
       
       // Cohere 密钥 (UUID格式)
-      `cohere extension:py created:>${today}`,
-      `cohere extension:js created:>${today}`,
+      `cohere extension:py ${dateFilter}`,
+      `cohere extension:js ${dateFilter}`,
       
       // 通用API密钥搜索
-      `"api_key" openai extension:js created:>${today}`,
-      `"api_key" openai extension:py created:>${today}`,
-      `"API_KEY" extension:env created:>${today}`,
-      `"OPENAI_API_KEY" created:>${today}`,
-      `"ANTHROPIC_API_KEY" created:>${today}`,
-      `"GOOGLE_API_KEY" created:>${today}`,
+      `"api_key" openai extension:js ${dateFilter}`,
+      `"api_key" openai extension:py ${dateFilter}`,
+      `"API_KEY" extension:env ${dateFilter}`,
+      `"OPENAI_API_KEY" ${dateFilter}`,
+      `"ANTHROPIC_API_KEY" ${dateFilter}`,
+      `"GOOGLE_API_KEY" ${dateFilter}`,
       
       // 配置文件中的密钥
-      `"secret" api extension:json created:>${today}`,
-      `"token" ai extension:yaml created:>${today}`,
+      `"secret" api extension:json ${dateFilter}`,
+      `"token" ai extension:yaml ${dateFilter}`,
     ];
 
     for (const query of queries) {

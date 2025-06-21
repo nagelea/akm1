@@ -37,8 +37,9 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
         SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        SCAN_TYPE: ${{ github.event.inputs.scan_type || 'recent' }}
       run: |
-        echo "🔍 Starting API key scan..."
+        echo "🔍 Starting API key scan (type: $SCAN_TYPE)..."
         node scripts/scanner.js
         echo "✅ Scan completed successfully"
         
