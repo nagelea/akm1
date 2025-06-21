@@ -26,7 +26,7 @@ export default function SensitiveKeysList({ user }) {
         .select(`
           *,
           leaked_keys_sensitive (
-            encrypted_key,
+            full_key,
             raw_context,
             github_url
           )
@@ -42,7 +42,7 @@ export default function SensitiveKeysList({ user }) {
     }
   }
 
-  const decryptKey = async (keyId, encryptedData) => {
+  const viewFullKey = async (keyId, fullKey) => {
     try {
       // 记录访问日志
       await supabase.from('access_logs').insert({
@@ -52,24 +52,12 @@ export default function SensitiveKeysList({ user }) {
         user_agent: navigator.userAgent
       })
 
-      // 这里应该调用后端API来解密密钥
-      // 为安全起见，解密应该在服务端进行
-      const response = await fetch('/api/decrypt-key', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ keyId, encryptedData })
-      })
-
-      if (response.ok) {
-        const { decryptedKey } = await response.json()
-        setDecryptedKey(decryptedKey)
-        setShowFullKey(true)
-      } else {
-        alert('解密失败，请检查权限')
-      }
+      // 直接显示完整密钥
+      setDecryptedKey(fullKey)
+      setShowFullKey(true)
     } catch (error) {
-      console.error('Decryption failed:', error)
-      alert('解密失败')
+      console.error('View key failed:', error)
+      alert('查看密钥失败')
     }
   }
 
@@ -179,19 +167,13 @@ export default function SensitiveKeysList({ user }) {
                   {key.leaked_keys_sensitive && (
                     <>
                       <button
-                        onClick={() => decryptKey(key.id, key.leaked_keys_sensitive.encrypted_key)}
+                        onClick={() => viewFullKey(key.id, key.leaked_keys_sensitive.full_key)}
                         className="px-3 py-1 bg-yellow-600 text-white text-sm rounded hover:bg-yellow-700"
                       >
                         查看完整密钥
                       </button>
                       <button
-                        onClick={() => {
-                          if (decryptedKey) {
-                            verifyKey(key.id, key.key_type, decryptedKey)
-                          } else {
-                            alert('请先查看完整密钥')
-                          }
-                        }}
+                        onClick={() => verifyKey(key.id, key.key_type, key.leaked_keys_sensitive.full_key)}
                         className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700"
                       >
                         验证密钥

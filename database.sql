@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS leaked_keys (
 CREATE TABLE IF NOT EXISTS leaked_keys_sensitive (
   id SERIAL PRIMARY KEY,
   key_id INTEGER REFERENCES leaked_keys(id) ON DELETE CASCADE,
-  encrypted_key TEXT NOT NULL,                  -- 加密后的完整密钥
+  full_key TEXT NOT NULL,                      -- 完整的原始密钥
   raw_context TEXT,                            -- 未脱敏的原始上下文
   github_url TEXT,                             -- 直接访问链接
   created_at TIMESTAMP DEFAULT NOW()

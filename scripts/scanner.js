@@ -2,10 +2,6 @@ const { Octokit } = require('@octokit/rest');
 const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
 
-// 加密配置
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'default-key-change-in-production';
-const ALGORITHM = 'aes-256-gcm';
-
 // API密钥检测模式 - 扩展版
 const KEY_PATTERNS = {
   openai: {
@@ -283,11 +279,10 @@ class APIKeyScanner {
     }).select().single();
 
     if (!error && keyRecord) {
-      // 加密并保存敏感信息
-      const encryptedKey = this.encryptData(key);
+      // 直接保存完整密钥（无加密）
       await this.supabase.from('leaked_keys_sensitive').insert({
         key_id: keyRecord.id,
-        encrypted_key: encryptedKey,
+        full_key: key,
         raw_context: rawContext,
         github_url: githubUrl
       });
@@ -455,37 +450,6 @@ class APIKeyScanner {
     const start = Math.max(0, keyIndex - 100);
     const end = Math.min(content.length, keyIndex + key.length + 100);
     return content.substring(start, end);
-  }
-
-  encryptData(text) {
-    const key = crypto.scryptSync(ENCRYPTION_KEY, 'salt', 32);
-    const iv = crypto.randomBytes(16);
-    const cipher = crypto.createCipherGCM(ALGORITHM, key, iv);
-    
-    let encrypted = cipher.update(text, 'utf8', 'hex');
-    encrypted += cipher.final('hex');
-    
-    const authTag = cipher.getAuthTag();
-    
-    return JSON.stringify({
-      encrypted: encrypted,
-      iv: iv.toString('hex'),
-      authTag: authTag.toString('hex')
-    });
-  }
-
-  decryptData(encryptedData) {
-    const data = JSON.parse(encryptedData);
-    const key = crypto.scryptSync(ENCRYPTION_KEY, 'salt', 32);
-    const iv = Buffer.from(data.iv, 'hex');
-    const decipher = crypto.createDecipherGCM(ALGORITHM, key, iv);
-    
-    decipher.setAuthTag(Buffer.from(data.authTag, 'hex'));
-    
-    let decrypted = decipher.update(data.encrypted, 'hex', 'utf8');
-    decrypted += decipher.final('utf8');
-    
-    return decrypted;
   }
 
   sleep(ms) {
