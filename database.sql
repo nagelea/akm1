@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS leaked_keys (
   file_path VARCHAR(500),                       -- 文件路径
   context_preview TEXT,                         -- 代码上下文片段
   severity VARCHAR(10) DEFAULT 'medium',        -- high, medium, low
+  confidence VARCHAR(10) DEFAULT 'medium',      -- high, medium, low - 检测置信度
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );

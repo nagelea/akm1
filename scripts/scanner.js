@@ -2,17 +2,27 @@ const { Octokit } = require('@octokit/rest');
 const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
 
-// API密钥检测模式
+// API密钥检测模式 - 扩展版
 const KEY_PATTERNS = {
   openai: {
     pattern: /sk-[a-zA-Z0-9]{48}/g,
     name: 'OpenAI',
     confidence: 'high'
   },
+  openai_org: {
+    pattern: /org-[a-zA-Z0-9]{24}/g,
+    name: 'OpenAI Organization',
+    confidence: 'high'
+  },
   google: {
     pattern: /AIza[0-9A-Za-z_-]{35}/g,
     name: 'Google AI',
     confidence: 'high'
+  },
+  google_service: {
+    pattern: /"private_key":\s*"[^"]*"/g,
+    name: 'Google Service Account',
+    confidence: 'medium'
   },
   anthropic: {
     pattern: /sk-ant-[a-zA-Z0-9_-]{95}/g,
@@ -33,6 +43,31 @@ const KEY_PATTERNS = {
     pattern: /r8_[a-zA-Z0-9]{40}/g,
     name: 'Replicate',
     confidence: 'high'
+  },
+  azure_openai: {
+    pattern: /[a-zA-Z0-9]{32}/g,
+    name: 'Azure OpenAI',
+    confidence: 'low'
+  },
+  mistral: {
+    pattern: /[a-zA-Z0-9]{32}/g,
+    name: 'Mistral AI',
+    confidence: 'low'
+  },
+  together: {
+    pattern: /[a-zA-Z0-9]{64}/g,
+    name: 'Together AI',
+    confidence: 'low'
+  },
+  palm: {
+    pattern: /AIza[0-9A-Za-z_-]{35}/g,
+    name: 'Google PaLM',
+    confidence: 'high'
+  },
+  stability: {
+    pattern: /sk-[a-zA-Z0-9]{48}/g,
+    name: 'Stability AI',
+    confidence: 'medium'
   }
 };
 
@@ -63,14 +98,49 @@ class APIKeyScanner {
   async scanRecent() {
     const today = new Date().toISOString().split('T')[0];
     
+    // 使用更精确的正则表达式组合搜索
     const queries = [
-      `sk-ant- created:>${today}`,  // Anthropic keys
-      `sk- openai created:>${today}`, // OpenAI keys  
-      `AIza extension:env created:>${today}`, // Google keys in env files
-      `hf_ huggingface created:>${today}`, // HuggingFace keys
-      `r8_ replicate created:>${today}`, // Replicate keys
-      `api_key extension:js created:>${today}`, // General API keys in JS
-      `api_key extension:py created:>${today}`, // General API keys in Python
+      // OpenAI 密钥 - 多种文件类型
+      `"sk-" extension:js created:>${today}`,
+      `"sk-" extension:py created:>${today}`,
+      `"sk-" extension:env created:>${today}`,
+      `"sk-" extension:ts created:>${today}`,
+      
+      // Anthropic Claude 密钥
+      `"sk-ant-" extension:js created:>${today}`,
+      `"sk-ant-" extension:py created:>${today}`,
+      `"sk-ant-" extension:env created:>${today}`,
+      
+      // Google AI 密钥
+      `"AIza" extension:js created:>${today}`,
+      `"AIza" extension:py created:>${today}`,
+      `"AIza" extension:env created:>${today}`,
+      `"AIza" extension:json created:>${today}`,
+      
+      // HuggingFace 密钥
+      `"hf_" extension:py created:>${today}`,
+      `"hf_" extension:js created:>${today}`,
+      `"hf_" extension:ipynb created:>${today}`,
+      
+      // Replicate 密钥
+      `"r8_" extension:py created:>${today}`,
+      `"r8_" extension:js created:>${today}`,
+      
+      // Cohere 密钥 (UUID格式)
+      `cohere extension:py created:>${today}`,
+      `cohere extension:js created:>${today}`,
+      
+      // 通用API密钥搜索
+      `"api_key" openai extension:js created:>${today}`,
+      `"api_key" openai extension:py created:>${today}`,
+      `"API_KEY" extension:env created:>${today}`,
+      `"OPENAI_API_KEY" created:>${today}`,
+      `"ANTHROPIC_API_KEY" created:>${today}`,
+      `"GOOGLE_API_KEY" created:>${today}`,
+      
+      // 配置文件中的密钥
+      `"secret" api extension:json created:>${today}`,
+      `"token" ai extension:yaml created:>${today}`,
     ];
 
     for (const query of queries) {
@@ -151,9 +221,17 @@ class APIKeyScanner {
   }
 
   async processFoundKey(key, type, fileInfo, content) {
+    // 获取密钥类型配置
+    const keyConfig = KEY_PATTERNS[type];
+    
     // 过滤明显的假密钥
     if (this.isLikelyFake(key, content)) {
       return false;
+    }
+
+    // 根据置信度进行额外验证
+    if (keyConfig.confidence === 'low' && !this.hasValidContext(key, content, type)) {
+      return false; // 低置信度密钥需要额外验证
     }
 
     const keyHash = crypto.createHash('sha256').update(key).digest('hex');
@@ -171,7 +249,7 @@ class APIKeyScanner {
 
     // 提取上下文信息
     const context = this.extractContext(key, content);
-    const severity = this.assessSeverity(fileInfo.path, content);
+    const severity = this.assessSeverity(fileInfo.path, content, keyConfig.confidence);
     
     // 保存到数据库
     const { error } = await this.supabase.from('leaked_keys').insert({
@@ -183,11 +261,12 @@ class APIKeyScanner {
       context_preview: context,
       severity: severity,
       repo_name: fileInfo.repository.full_name,
-      file_path: fileInfo.path
+      file_path: fileInfo.path,
+      confidence: keyConfig.confidence
     });
 
     if (!error) {
-      console.log(`🔑 Found new ${type} key in ${fileInfo.repository.full_name}/${fileInfo.path} [${severity}]`);
+      console.log(`🔑 Found new ${keyConfig.name} key in ${fileInfo.repository.full_name}/${fileInfo.path} [${severity}] (${keyConfig.confidence} confidence)`);
       return true;
     } else {
       console.error('Database insert failed:', error);
@@ -211,7 +290,8 @@ class APIKeyScanner {
     const fakeIndicators = [
       'example', 'placeholder', 'your-api-key', 'insert_key_here',
       'todo', 'fixme', 'test', 'demo', 'sample', 'fake',
-      'xxxxxxx', '123456', 'abcdef', 'replace_me'
+      'xxxxxxx', '123456', 'abcdef', 'replace_me', 'mock',
+      'dummy', 'template', 'tutorial', 'guide'
     ];
     
     const keyLower = key.toLowerCase();
@@ -224,11 +304,31 @@ class APIKeyScanner {
     
     // 检查周围上下文
     const keyIndex = content.indexOf(key);
-    const contextStart = Math.max(0, keyIndex - 100);
-    const contextEnd = Math.min(content.length, keyIndex + key.length + 100);
+    const contextStart = Math.max(0, keyIndex - 150);
+    const contextEnd = Math.min(content.length, keyIndex + key.length + 150);
     const context = content.substring(contextStart, contextEnd).toLowerCase();
     
     return fakeIndicators.some(indicator => context.includes(indicator));
+  }
+
+  hasValidContext(key, content, type) {
+    const keyIndex = content.indexOf(key);
+    const contextStart = Math.max(0, keyIndex - 200);
+    const contextEnd = Math.min(content.length, keyIndex + key.length + 200);
+    const context = content.substring(contextStart, contextEnd).toLowerCase();
+    
+    // 针对不同类型的密钥检查有效上下文
+    const validContexts = {
+      azure_openai: ['azure', 'openai', 'endpoint', 'deployment'],
+      mistral: ['mistral', 'api', 'token', 'auth'],
+      together: ['together', 'ai', 'api_key', 'token'],
+      stability: ['stability', 'stable', 'diffusion', 'image']
+    };
+    
+    const requiredContexts = validContexts[type] || [];
+    if (requiredContexts.length === 0) return true;
+    
+    return requiredContexts.some(ctx => context.includes(ctx));
   }
 
   maskKey(key) {
