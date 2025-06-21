@@ -28,6 +28,9 @@ export default function AdminPage() {
     const checkAuth = async () => {
       try {
         console.log('Checking auth...')
+        console.log('Supabase URL:', process.env.NEXT_PUBLIC_SUPABASE_URL)
+        console.log('Anon Key configured:', !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
+        
         const { data: { session }, error: sessionError } = await supabase.auth.getSession()
         
         if (sessionError) {
