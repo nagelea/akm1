@@ -32,9 +32,9 @@ export default function SensitiveKeysList({ user }) {
           )
         `)
         .order('created_at', { ascending: false })
-        .limit(50)
 
       setKeys(data || [])
+      console.log('Loaded all keys:', data?.length || 0)
     } catch (error) {
       console.error('Failed to fetch keys:', error)
     } finally {
@@ -119,90 +119,146 @@ export default function SensitiveKeysList({ user }) {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-medium text-gray-900">
-          敏感密钥管理 ({keys.length} 条记录)
+          发现的API密钥 ({keys.length} 条记录)
         </h3>
         <button
           onClick={fetchKeys}
           className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
         >
-          刷新
+          刷新数据
         </button>
       </div>
 
-      {/* 密钥列表 */}
-      <div className="bg-white shadow overflow-hidden sm:rounded-md">
-        <ul className="divide-y divide-gray-200">
-          {keys.map((key) => (
-            <li key={key.id} className="px-6 py-4">
-              <div className="flex items-center justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">
-                        {key.key_type.toUpperCase()} - {key.key_preview}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        {key.repo_name} • {key.file_path}
-                      </p>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <SeverityBadge severity={key.severity} />
-                      <StatusBadge status={key.status} />
-                      <ConfidenceBadge confidence={key.confidence} />
-                    </div>
-                  </div>
-                  <div className="mt-2">
-                    <p className="text-sm text-gray-600">
-                      发现时间: {new Date(key.first_seen).toLocaleString('zh-CN')}
-                    </p>
-                    {key.last_verified && (
-                      <p className="text-sm text-gray-600">
-                        验证时间: {new Date(key.last_verified).toLocaleString('zh-CN')}
-                      </p>
-                    )}
-                  </div>
+      {/* 密钥列表 - 直接显示格式 */}
+      <div className="space-y-4">
+        {keys.map((key) => (
+          <div key={key.id} className="bg-white border rounded-lg p-6 shadow-sm">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* 基本信息 */}
+              <div className="lg:col-span-1">
+                <div className="flex items-center space-x-2 mb-3">
+                  <h3 className="font-bold text-lg text-gray-900">
+                    {key.key_type.toUpperCase()}
+                  </h3>
+                  <SeverityBadge severity={key.severity} />
+                  <ConfidenceBadge confidence={key.confidence} />
+                  <StatusBadge status={key.status} />
                 </div>
                 
-                <div className="flex flex-col space-y-2 ml-4">
+                <div className="space-y-2 text-sm">
+                  <div>
+                    <span className="font-medium text-gray-700">仓库:</span> 
+                    <a 
+                      href={`https://github.com/${key.repo_name}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:text-blue-800 ml-1 underline"
+                    >
+                      {key.repo_name}
+                    </a>
+                  </div>
+                  
+                  <div>
+                    <span className="font-medium text-gray-700">文件:</span> 
+                    {key.leaked_keys_sensitive?.github_url ? (
+                      <a
+                        href={key.leaked_keys_sensitive.github_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:text-blue-800 ml-1 underline"
+                      >
+                        {key.file_path}
+                      </a>
+                    ) : (
+                      <span className="ml-1 text-gray-600">{key.file_path}</span>
+                    )}
+                  </div>
+                  
+                  <div>
+                    <span className="font-medium text-gray-700">语言:</span> 
+                    <span className="ml-1 text-gray-600">{key.repo_language}</span>
+                  </div>
+                  
+                  <div>
+                    <span className="font-medium text-gray-700">发现时间:</span> 
+                    <span className="ml-1 text-gray-600">{new Date(key.first_seen).toLocaleString('zh-CN')}</span>
+                  </div>
+                  
+                  {key.last_verified && (
+                    <div>
+                      <span className="font-medium text-gray-700">验证时间:</span> 
+                      <span className="ml-1 text-gray-600">{new Date(key.last_verified).toLocaleString('zh-CN')}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* 操作按钮 */}
+                <div className="mt-4 space-y-2">
                   {key.leaked_keys_sensitive && (
-                    <>
-                      <button
-                        onClick={() => viewFullKey(key.id, key.leaked_keys_sensitive.full_key)}
-                        className="px-3 py-1 bg-yellow-600 text-white text-sm rounded hover:bg-yellow-700"
-                      >
-                        查看完整密钥
-                      </button>
-                      <button
-                        onClick={() => verifyKey(key.id, key.key_type, key.leaked_keys_sensitive.full_key)}
-                        className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700"
-                      >
-                        验证密钥
-                      </button>
-                      {key.leaked_keys_sensitive.github_url && (
-                        <a
-                          href={key.leaked_keys_sensitive.github_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 text-center"
-                        >
-                          查看源码
-                        </a>
-                      )}
-                    </>
+                    <button
+                      onClick={() => verifyKey(key.id, key.key_type, key.leaked_keys_sensitive.full_key)}
+                      className="w-full px-3 py-2 bg-green-600 text-white text-sm rounded hover:bg-green-700"
+                    >
+                      验证密钥有效性
+                    </button>
                   )}
                 </div>
               </div>
-              
-              {/* 上下文预览 */}
-              {key.context_preview && (
-                <div className="mt-3 p-3 bg-gray-50 rounded text-sm">
-                  <p className="font-medium text-gray-700 mb-1">代码上下文:</p>
-                  <code className="text-gray-600">{key.context_preview}</code>
-                </div>
-              )}
-            </li>
-          ))}
-        </ul>
+
+              {/* 完整密钥 */}
+              <div className="lg:col-span-1">
+                <h4 className="font-bold text-sm text-gray-700 mb-3">🔑 完整API密钥:</h4>
+                {key.leaked_keys_sensitive?.full_key ? (
+                  <div className="bg-red-50 border border-red-200 p-4 rounded">
+                    <code className="text-sm font-mono break-all text-red-700 bg-white p-2 rounded block">
+                      {key.leaked_keys_sensitive.full_key}
+                    </code>
+                    <div className="flex mt-3 space-x-2">
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(key.leaked_keys_sensitive.full_key)
+                          alert('完整密钥已复制到剪贴板')
+                        }}
+                        className="px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700"
+                      >
+                        复制密钥
+                      </button>
+                      <button
+                        onClick={() => viewFullKey(key.id, key.leaked_keys_sensitive.full_key)}
+                        className="px-2 py-1 bg-yellow-600 text-white text-xs rounded hover:bg-yellow-700"
+                      >
+                        记录查看
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-gray-50 border p-4 rounded">
+                    <code className="text-sm font-mono text-gray-500 break-all">
+                      {key.key_preview}
+                    </code>
+                    <p className="text-xs text-gray-400 mt-2">⚠️ 完整密钥数据未找到</p>
+                  </div>
+                )}
+              </div>
+
+              {/* 代码上下文 */}
+              <div className="lg:col-span-1">
+                <h4 className="font-bold text-sm text-gray-700 mb-3">📄 代码上下文:</h4>
+                {key.leaked_keys_sensitive?.raw_context || key.context_preview ? (
+                  <div className="bg-gray-50 border p-4 rounded max-h-48 overflow-y-auto">
+                    <code className="text-xs font-mono text-gray-700 whitespace-pre-wrap leading-relaxed">
+                      {key.leaked_keys_sensitive?.raw_context || key.context_preview}
+                    </code>
+                  </div>
+                ) : (
+                  <div className="bg-gray-50 border p-4 rounded">
+                    <p className="text-xs text-gray-400">无代码上下文信息</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* 完整密钥显示模态框 */}
