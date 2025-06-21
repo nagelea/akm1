@@ -1,0 +1,56 @@
+name: API Key Scanner
+
+on:
+  schedule:
+    # 每6小时运行一次扫描
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+    # 允许手动触发
+    inputs:
+      scan_type:
+        description: '扫描类型'
+        required: false
+        default: 'recent'
+        type: choice
+        options:
+        - recent
+        - full
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm install
+      
+    - name: Run API Key Scanner
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+      run: |
+        echo "🔍 Starting API key scan..."
+        node scripts/scanner.js
+        echo "✅ Scan completed successfully"
+        
+    - name: Update scan status
+      if: always()
+      run: |
+        echo "📊 Scan job finished at $(date)"
+        
+    # 可选：发送通知到Slack/Discord/邮件
+    - name: Send notification on failure
+      if: failure()
+      run: |
+        echo "❌ Scan failed! Please check the logs."
+        # 这里可以添加通知逻辑

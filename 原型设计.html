@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecretGuard - API密钥泄露检测</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        /* Header */
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+        }
+
+        .nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 0;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+            list-style: none;
+        }
+
+        .nav-links a {
+            text-decoration: none;
+            color: #333;
+            font-weight: 500;
+            transition: color 0.3s;
+        }
+
+        .nav-links a:hover {
+            color: #667eea;
+        }
+
+        /* Hero Section */
+        .hero {
+            text-align: center;
+            padding: 4rem 0;
+            color: white;
+        }
+
+        .hero h1 {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            font-weight: 800;
+        }
+
+        .hero .subtitle {
+            font-size: 1.2rem;
+            margin-bottom: 0.5rem;
+            opacity: 0.9;
+        }
+
+        .hero .description {
+            font-size: 1rem;
+            opacity: 0.8;
+            margin-bottom: 2rem;
+        }
+
+        /* Stats */
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 2rem;
+            margin: 2rem 0;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 1.5rem;
+            border-radius: 12px;
+            text-align: center;
+            backdrop-filter: blur(10px);
+        }
+
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: white;
+        }
+
+        .stat-label {
+            color: rgba(255, 255, 255, 0.8);
+            margin-top: 0.5rem;
+        }
+
+        /* Main Content */
+        .main-content {
+            background: white;
+            border-radius: 20px 20px 0 0;
+            margin-top: 2rem;
+            padding: 2rem 0;
+            min-height: 70vh;
+        }
+
+        /* Filters */
+        .filters {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .filter-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .filter-select {
+            padding: 0.5rem 1rem;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            background: white;
+            cursor: pointer;
+            transition: border-color 0.3s;
+        }
+
+        .filter-select:hover {
+            border-color: #667eea;
+        }
+
+        .random-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background 0.3s;
+            margin-left: auto;
+        }
+
+        .random-btn:hover {
+            background: #5a67d8;
+        }
+
+        /* Key Cards */
+        .keys-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .key-card {
+            background: white;
+            border: 1px solid #e1e5e9;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .key-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+        }
+
+        .key-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .key-type {
+            background: #667eea;
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+
+        .key-views {
+            color: #666;
+            font-size: 0.875rem;
+        }
+
+        .exposed-key {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 1rem;
+            font-family: 'Courier New', monospace;
+            font-size: 0.875rem;
+            position: relative;
+            margin-bottom: 1rem;
+        }
+
+        .copy-btn {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #666;
+            padding: 0.25rem;
+        }
+
+        .key-info {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+        }
+
+        .info-item {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .info-label {
+            font-size: 0.75rem;
+            color: #666;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+
+        .info-value {
+            font-weight: 500;
+        }
+
+        .status {
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status.valid {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status.invalid {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status.unknown {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .context {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: #f8f9fa;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.75rem;
+            color: #666;
+            overflow-x: auto;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 2rem;
+            }
+
+            .keys-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .filters {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .random-btn {
+                margin-left: 0;
+                margin-top: 1rem;
+            }
+        }
+
+        /* Loading Animation */
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 4rem;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <nav class="nav">
+                <div class="logo">🔐 SecretGuard</div>
+                <ul class="nav-links">
+                    <li><a href="#home">首页</a></li>
+                    <li><a href="#leaderboard">排行榜</a></li>
+                    <li><a href="#about">关于</a></li>
+                    <li><a href="#api">API</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container">
+            <h1>Unsecured AI Keys</h1>
+            <p class="subtitle">The Wall of "Oops, I Pushed That"</p>
+            <p class="description">帮助开发者避免那尴尬的"我刚泄露了价值$10,000的API调用"与老板（或配偶）的对话</p>
+            
+            <div class="stats">
+                <div class="stat-card">
+                    <div class="stat-number">1,247</div>
+                    <div class="stat-label">发现的密钥</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">234</div>
+                    <div class="stat-label">今日新增</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">892</div>
+                    <div class="stat-label">仍然有效</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">12</div>
+                    <div class="stat-label">服务商</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="container">
+            <!-- Filters -->
+            <div class="filters">
+                <div class="filter-group">
+                    <label for="serviceFilter">服务商:</label>
+                    <select id="serviceFilter" class="filter-select">
+                        <option value="">全部</option>
+                        <option value="openai">OpenAI (50个密钥)</option>
+                        <option value="anthropic">AnthropicClaude (5个密钥)</option>
+                        <option value="google">GoogleAI (1,224个密钥)</option>
+                        <option value="cohere">Cohere (1个密钥)</option>
+                        <option value="huggingface">HuggingFace (181个密钥)</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label for="statusFilter">状态:</label>
+                    <select id="statusFilter" class="filter-select">
+                        <option value="">全部状态</option>
+                        <option value="valid">有效</option>
+                        <option value="invalid">无效</option>
+                        <option value="unknown">未知</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label for="timeFilter">时间:</label>
+                    <select id="timeFilter" class="filter-select">
+                        <option value="">全部时间</option>
+                        <option value="today">今天</option>
+                        <option value="week">本周</option>
+                        <option value="month">本月</option>
+                    </select>
+                </div>
+
+                <button class="random-btn" onclick="loadRandomKey()">
+                    <i class="fas fa-random"></i> 随机查看
+                </button>
+            </div>
+
+            <!-- Keys Grid -->
+            <div class="keys-grid" id="keysGrid">
+                <!-- Sample Key Card 1 -->
+                <div class="key-card">
+                    <div class="key-header">
+                        <span class="key-type">GoogleAI</span>
+                        <span class="key-views"><i class="fas fa-eye"></i> 23 views</span>
+                    </div>
+                    
+                    <div class="exposed-key">
+                        <span>AIzaSyBhud911EuUWNLTPuLG1nBUnY***SM1bu1Q</span>
+                        <button class="copy-btn" title="复制密钥">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    </div>
+
+                    <div class="key-info">
+                        <div class="info-item">
+                            <span class="info-label">状态</span>
+                            <span class="status valid">有效</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">发现时间</span>
+                            <span class="info-value">6/7/2025, 11:37:42 PM</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">密钥年龄</span>
+                            <span class="info-value">1 week old</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">文件类型</span>
+                            <span class="info-value">.env</span>
+                        </div>
+                    </div>
+
+                    <div class="context">
+                        <strong>Context:</strong><br>
+                        GOOGLE_GEMINI_KEY="AIzaSyBhud911EuUWNLTPuLG1nBUnYvwnSM1bu1Q"<br>
+                        Line 1
+                    </div>
+                </div>
+
+                <!-- Sample Key Card 2 -->
+                <div class="key-card">
+                    <div class="key-header">
+                        <span class="key-type" style="background: #ff6b6b;">OpenAI</span>
+                        <span class="key-views"><i class="fas fa-eye"></i> 156 views</span>
+                    </div>
+                    
+                    <div class="exposed-key">
+                        <span>sk-proj-abc123def456***xyz789</span>
+                        <button class="copy-btn" title="复制密钥">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    </div>
+
+                    <div class="key-info">
+                        <div class="info-item">
+                            <span class="info-label">状态</span>
+                            <span class="status invalid">无效</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">发现时间</span>
+                            <span class="info-value">6/5/2025, 14:22:10 PM</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">密钥年龄</span>
+                            <span class="info-value">3 days old</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">文件类型</span>
+                            <span class="info-value">.js</span>
+                        </div>
+                    </div>
+
+                    <div class="context">
+                        <strong>Context:</strong><br>
+                        const openai = new OpenAI({<br>
+                        &nbsp;&nbsp;apiKey: "sk-proj-abc123def456***xyz789",<br>
+                        });
+                    </div>
+                </div>
+
+                <!-- Sample Key Card 3 -->
+                <div class="key-card">
+                    <div class="key-header">
+                        <span class="key-type" style="background: #4ecdc4;">Anthropic</span>
+                        <span class="key-views"><i class="fas fa-eye"></i> 89 views</span>
+                    </div>
+                    
+                    <div class="exposed-key">
+                        <span>sk-ant-api03-abc***xyz-T3BlbkFJ</span>
+                        <button class="copy-btn" title="复制密钥">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    </div>
+
+                    <div class="key-info">
+                        <div class="info-item">
+                            <span class="info-label">状态</span>
+                            <span class="status unknown">未知</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">发现时间</span>
+                            <span class="info-value">6/1/2025, 09:15:33 AM</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">密钥年龄</span>
+                            <span class="info-value">20 days old</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">文件类型</span>
+                            <span class="info-value">.py</span>
+                        </div>
+                    </div>
+
+                    <div class="context">
+                        <strong>Context:</strong><br>
+                        ANTHROPIC_API_KEY = "sk-ant-api03-abc***xyz-T3BlbkFJ"<br>
+                        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+                    </div>
+                </div>
+
+                <!-- Sample Key Card 4 -->
+                <div class="key-card">
+                    <div class="key-header">
+                        <span class="key-type" style="background: #ffa726;">HuggingFace</span>
+                        <span class="key-views"><i class="fas fa-eye"></i> 67 views</span>
+                    </div>
+                    
+                    <div class="exposed-key">
+                        <span>hf_abc***xyz123</span>
+                        <button class="copy-btn" title="复制密钥">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    </div>
+
+                    <div class="key-info">
+                        <div class="info-item">
+                            <span class="info-label">状态</span>
+                            <span class="status valid">有效</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">发现时间</span>
+                            <span class="info-value">6/20/2025, 16:45:22 PM</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">密钥年龄</span>
+                            <span class="info-value">1 day old</span>
+                        </div>
+                        <div
