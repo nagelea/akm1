@@ -50,7 +50,6 @@ export default function SimpleAdminPage() {
           )
         `)
         .order('created_at', { ascending: false })
-        .limit(10)
 
       setKeys(data || [])
       console.log('Loaded keys:', data?.length || 0)
@@ -157,60 +156,94 @@ export default function SimpleAdminPage() {
             <div className="space-y-4">
               {keys.map((key) => (
                 <div key={key.id} className="border rounded-lg p-4">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="font-medium">
-                        {key.key_type.toUpperCase()} - {key.key_preview}
-                      </h3>
-                      <p className="text-sm text-gray-600">
-                        {key.repo_name} • {key.file_path}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        发现时间: {new Date(key.first_seen).toLocaleString('zh-CN')}
-                      </p>
-                    </div>
-                    <div className="flex flex-col space-y-2">
-                      <span className={`px-2 py-1 rounded text-xs ${
-                        key.severity === 'high' ? 'bg-red-100 text-red-800' :
-                        key.severity === 'medium' ? 'bg-yellow-100 text-yellow-800' :
-                        'bg-green-100 text-green-800'
-                      }`}>
-                        {key.severity}
-                      </span>
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    {/* 基本信息 */}
+                    <div className="lg:col-span-1">
+                      <div className="flex items-center space-x-2 mb-2">
+                        <h3 className="font-medium text-lg">
+                          {key.key_type.toUpperCase()}
+                        </h3>
+                        <span className={`px-2 py-1 rounded text-xs ${
+                          key.severity === 'high' ? 'bg-red-100 text-red-800' :
+                          key.severity === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                          'bg-green-100 text-green-800'
+                        }`}>
+                          {key.severity}
+                        </span>
+                        <span className={`px-2 py-1 rounded text-xs ${
+                          key.confidence === 'high' ? 'bg-blue-100 text-blue-800' :
+                          key.confidence === 'medium' ? 'bg-purple-100 text-purple-800' :
+                          'bg-gray-100 text-gray-800'
+                        }`}>
+                          {key.confidence}
+                        </span>
+                      </div>
                       
-                      {key.leaked_keys_sensitive && (
-                        <div className="space-y-1">
-                          <button
-                            onClick={() => {
-                              const fullKey = key.leaked_keys_sensitive.full_key
-                              navigator.clipboard.writeText(fullKey)
-                              alert(`完整密钥已复制: ${fullKey}`)
-                            }}
-                            className="px-2 py-1 bg-yellow-600 text-white text-xs rounded hover:bg-yellow-700"
+                      <div className="space-y-1 text-sm text-gray-600">
+                        <p><span className="font-medium">仓库:</span> 
+                          <a 
+                            href={`https://github.com/${key.repo_name}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:text-blue-800 ml-1"
                           >
-                            复制完整密钥
-                          </button>
-                          
-                          {key.leaked_keys_sensitive.github_url && (
+                            {key.repo_name}
+                          </a>
+                        </p>
+                        <p><span className="font-medium">文件:</span> 
+                          {key.leaked_keys_sensitive?.github_url ? (
                             <a
                               href={key.leaked_keys_sensitive.github_url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="block px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 text-center"
+                              className="text-blue-600 hover:text-blue-800 ml-1"
                             >
-                              查看源码
+                              {key.file_path}
                             </a>
+                          ) : (
+                            <span className="ml-1">{key.file_path}</span>
                           )}
+                        </p>
+                        <p><span className="font-medium">语言:</span> {key.repo_language}</p>
+                        <p><span className="font-medium">发现:</span> {new Date(key.first_seen).toLocaleString('zh-CN')}</p>
+                      </div>
+                    </div>
+
+                    {/* 完整密钥 */}
+                    <div className="lg:col-span-1">
+                      <h4 className="font-medium text-sm text-gray-700 mb-2">完整API密钥:</h4>
+                      {key.leaked_keys_sensitive?.full_key ? (
+                        <div className="bg-gray-100 p-3 rounded border">
+                          <code className="text-sm font-mono break-all text-red-600">
+                            {key.leaked_keys_sensitive.full_key}
+                          </code>
+                        </div>
+                      ) : (
+                        <div className="bg-gray-50 p-3 rounded border">
+                          <code className="text-sm font-mono text-gray-500">
+                            {key.key_preview}
+                          </code>
+                          <p className="text-xs text-gray-400 mt-1">敏感数据未找到</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 代码上下文 */}
+                    <div className="lg:col-span-1">
+                      <h4 className="font-medium text-sm text-gray-700 mb-2">代码上下文:</h4>
+                      {key.leaked_keys_sensitive?.raw_context || key.context_preview ? (
+                        <div className="bg-gray-50 p-3 rounded border max-h-32 overflow-y-auto">
+                          <code className="text-xs font-mono text-gray-700 whitespace-pre-wrap">
+                            {key.leaked_keys_sensitive?.raw_context || key.context_preview}
+                          </code>
+                        </div>
+                      ) : (
+                        <div className="bg-gray-50 p-3 rounded border">
+                          <p className="text-xs text-gray-400">无上下文信息</p>
                         </div>
                       )}
                     </div>
                   </div>
-                  
-                  {key.context_preview && (
-                    <div className="mt-3 p-2 bg-gray-50 rounded text-xs">
-                      <code>{key.context_preview}</code>
-                    </div>
-                  )}
                 </div>
               ))}
             </div>
