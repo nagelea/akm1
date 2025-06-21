@@ -111,50 +111,39 @@ class APIKeyScanner {
     
     console.log(`📅 Scan mode: ${scanType} (${dateFilter})`);
     
-    // 使用更精确的正则表达式组合搜索
-    const queries = [
-      // OpenAI 密钥 - 多种文件类型
-      `"sk-" extension:js ${dateFilter}`,
-      `"sk-" extension:py ${dateFilter}`,
-      `"sk-" extension:env ${dateFilter}`,
-      `"sk-" extension:ts ${dateFilter}`,
-      
-      // Anthropic Claude 密钥
-      `"sk-ant-" extension:js ${dateFilter}`,
-      `"sk-ant-" extension:py ${dateFilter}`,
-      `"sk-ant-" extension:env ${dateFilter}`,
-      
-      // Google AI 密钥
-      `"AIza" extension:js ${dateFilter}`,
-      `"AIza" extension:py ${dateFilter}`,
-      `"AIza" extension:env ${dateFilter}`,
-      `"AIza" extension:json ${dateFilter}`,
-      
-      // HuggingFace 密钥
-      `"hf_" extension:py ${dateFilter}`,
-      `"hf_" extension:js ${dateFilter}`,
-      `"hf_" extension:ipynb ${dateFilter}`,
-      
-      // Replicate 密钥
-      `"r8_" extension:py ${dateFilter}`,
-      `"r8_" extension:js ${dateFilter}`,
-      
-      // Cohere 密钥 (UUID格式)
-      `cohere extension:py ${dateFilter}`,
-      `cohere extension:js ${dateFilter}`,
-      
-      // 通用API密钥搜索
-      `"api_key" openai extension:js ${dateFilter}`,
-      `"api_key" openai extension:py ${dateFilter}`,
-      `"API_KEY" extension:env ${dateFilter}`,
-      `"OPENAI_API_KEY" ${dateFilter}`,
-      `"ANTHROPIC_API_KEY" ${dateFilter}`,
-      `"GOOGLE_API_KEY" ${dateFilter}`,
-      
-      // 配置文件中的密钥
-      `"secret" api extension:json ${dateFilter}`,
-      `"token" ai extension:yaml ${dateFilter}`,
-    ];
+    // 优化搜索策略 - GitHub API限制友好
+    let queries = [];
+    
+    if (scanType === 'recent') {
+      // 今日扫描 - 使用精确搜索
+      queries = [
+        `"sk-" ${dateFilter}`,
+        `"sk-ant-" ${dateFilter}`,
+        `"AIza" ${dateFilter}`,
+        `"hf_" ${dateFilter}`,
+        `"r8_" ${dateFilter}`,
+        `"OPENAI_API_KEY" ${dateFilter}`,
+        `"ANTHROPIC_API_KEY" ${dateFilter}`,
+      ];
+    } else {
+      // 全面扫描 - 使用更广泛的搜索，先测试几个常见的
+      queries = [
+        // 最常见的搜索词，应该能找到结果
+        `"sk-" language:python`,
+        `"sk-" language:javascript`,
+        `"AIza" language:python`,  
+        `"hf_" language:python`,
+        `"api_key" language:python`,
+        `"OPENAI_API_KEY"`,
+        `"openai" "sk-"`,
+        `"import openai"`,
+        // 如果基础搜索有结果，再尝试更具体的
+        `sk- extension:py`,
+        `sk- extension:js`,
+        `AIza extension:py`,
+        `hf_ extension:py`,
+      ];
+    }
 
     for (const query of queries) {
       try {
@@ -173,23 +162,30 @@ class APIKeyScanner {
       
       const results = await this.octokit.rest.search.code({
         q: query,
-        per_page: 20,
+        per_page: 30,
         sort: 'indexed'
       });
 
-      console.log(`📄 Found ${results.data.items.length} files`);
+      console.log(`📄 Found ${results.data.items.length} files (total: ${results.data.total_count})`);
+
+      if (results.data.items.length === 0) {
+        console.log(`⚠️  No results for query: ${query}`);
+      }
 
       for (const item of results.data.items) {
         this.scannedToday++;
+        console.log(`🔍 Analyzing: ${item.repository.full_name}/${item.path}`);
         await this.analyzeFile(item);
-        await this.sleep(1000);
+        await this.sleep(800); // 稍微减少延迟
       }
     } catch (error) {
       if (error.status === 403) {
         console.log('⏳ Rate limited, waiting 60s...');
         await this.sleep(60000);
+      } else if (error.status === 422) {
+        console.log(`❌ Invalid search query: ${query}`);
       } else {
-        throw error;
+        console.error(`❌ Search error for "${query}":`, error.message);
       }
     }
   }
