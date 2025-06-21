@@ -16,20 +16,37 @@ export default function SensitiveKeysList({ user }) {
 
   const fetchKeys = async () => {
     try {
-      const { data } = await supabase
-        .from('leaked_keys')
-        .select(`
-          *,
-          leaked_keys_sensitive (
-            full_key,
-            raw_context,
-            github_url
-          )
-        `)
-        .order('created_at', { ascending: false })
-
-      setKeys(data || [])
-      console.log('Loaded all keys:', data?.length || 0)
+      // 使用原生SQL查询，避免嵌套查询权限问题
+      const { data, error } = await supabase.rpc('get_keys_with_sensitive_data')
+      
+      if (error) {
+        console.error('RPC call failed, falling back to manual query:', error)
+        
+        // 备用方案：分别查询然后合并
+        const [keysResult, sensitiveResult] = await Promise.all([
+          supabase.from('leaked_keys').select('*').order('created_at', { ascending: false }),
+          supabase.from('leaked_keys_sensitive').select('*')
+        ])
+        
+        if (keysResult.error || sensitiveResult.error) {
+          throw new Error('Both queries failed')
+        }
+        
+        // 手动合并数据
+        const keysWithSensitive = keysResult.data.map(key => {
+          const sensitive = sensitiveResult.data.find(s => s.key_id === key.id)
+          return {
+            ...key,
+            leaked_keys_sensitive: sensitive || null
+          }
+        })
+        
+        setKeys(keysWithSensitive)
+        console.log('Loaded keys with manual merge:', keysWithSensitive.length)
+      } else {
+        setKeys(data || [])
+        console.log('Loaded keys with RPC:', data?.length || 0)
+      }
     } catch (error) {
       console.error('Failed to fetch keys:', error)
     } finally {
