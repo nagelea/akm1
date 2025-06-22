@@ -286,6 +286,8 @@ export async function POST(request) {
     switch (keyType.toLowerCase()) {
       case 'openai':
       case 'openai_org':
+      case 'openai_project':
+      case 'openai_user':
       case 'deepseek':
         isValid = await verifyOpenAI(key)
         break

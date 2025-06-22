@@ -15,6 +15,16 @@ const KEY_PATTERNS = {
     name: 'OpenAI',
     confidence: 'high'
   },
+  openai_project: {
+    pattern: /sk-proj-[a-zA-Z0-9_-]{64,}/g,
+    name: 'OpenAI Project',
+    confidence: 'high'
+  },
+  openai_user: {
+    pattern: /sk-user-[a-zA-Z0-9_-]{64,}/g,
+    name: 'OpenAI User',
+    confidence: 'high'
+  },
   openai_org: {
     pattern: /org-[a-zA-Z0-9]{24}/g,
     name: 'OpenAI Organization',
