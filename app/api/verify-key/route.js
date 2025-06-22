@@ -6,13 +6,90 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY
 )
 
-async function verifyOpenAI(key) {
+// 从代码上下文提取OpenAI兼容服务的base_url
+function extractOpenAIBaseURL(context) {
+  if (!context) return null
+  
+  const baseUrlPatterns = [
+    // base_url 赋值模式
+    /base_url["\s]*[:=]["\s]*["'`]?([^"'\s,}\]\)\n]+)/gi,
+    /api_base["\s]*[:=]["\s]*["'`]?([^"'\s,}\]\)\n]+)/gi,
+    /openai_api_base["\s]*[:=]["\s]*["'`]?([^"'\s,}\]\)\n]+)/gi,
+    
+    // 环境变量模式
+    /OPENAI_BASE_URL["\s]*[:=]["\s]*["'`]?([^"'\s,}\]\)\n]+)/gi,
+    /OPENAI_API_BASE["\s]*[:=]["\s]*["'`]?([^"'\s,}\]\)\n]+)/gi,
+    
+    // 直接URL模式
+    /https:\/\/[\w.-]+\/v1[^\s"'\)\];,}]*/gi,
+    /https:\/\/[\w.-]+\.(?:com|cn|net|org)\/[^\s"'\)\];,}]*v1[^\s"'\)\];,}]*/gi
+  ]
+  
+  for (const pattern of baseUrlPatterns) {
+    const matches = [...context.matchAll(pattern)]
+    if (matches.length > 0) {
+      for (const match of matches) {
+        let url = match[1] || match[0]
+        // 清理引号和空格
+        url = url.replace(/^["'`\s]|["'`\s]$/g, '')
+        
+        // 验证URL格式且不是官方API
+        if (url.startsWith('http') && !url.includes('api.openai.com')) {
+          return url.replace(/\/+$/, '') // 移除末尾斜杠
+        }
+      }
+    }
+  }
+  
+  return null
+}
+
+// 增强OpenAI验证，支持自定义base_url
+async function verifyOpenAI(key, context = null) {
   try {
+    // 1. 尝试提取自定义base_url
+    const customBaseUrl = extractOpenAIBaseURL(context)
+    
+    if (customBaseUrl) {
+      console.log(`OpenAI: Trying custom base_url ${customBaseUrl}`)
+      try {
+        const modelsUrl = customBaseUrl.endsWith('/v1') ? 
+          `${customBaseUrl}/models` : `${customBaseUrl}/v1/models`
+        
+        const response = await fetch(modelsUrl, {
+          headers: { 'Authorization': `Bearer ${key}` },
+          timeout: 10000
+        })
+        
+        if (response.ok) {
+          console.log('OpenAI: Custom endpoint verification successful')
+          return true
+        } else if (response.status === 401 || response.status === 403) {
+          console.log('OpenAI: Custom endpoint - invalid key (401/403)')
+          return false
+        }
+        
+        console.log(`OpenAI: Custom endpoint returned ${response.status}, trying official API`)
+      } catch (error) {
+        console.log(`OpenAI: Custom endpoint error (${error.message}), trying official API`)
+      }
+    }
+    
+    // 2. 降级到官方API验证
     const response = await fetch('https://api.openai.com/v1/models', {
       headers: { 'Authorization': `Bearer ${key}` }
     })
-    return response.ok
-  } catch {
+    
+    if (response.ok) {
+      console.log('OpenAI: Official API verification successful')
+      return true
+    } else {
+      console.log(`OpenAI: Official API returned ${response.status}`)
+      return false
+    }
+    
+  } catch (error) {
+    console.log('OpenAI: Verification error:', error.message)
     return false
   }
 }
@@ -265,8 +342,9 @@ export async function POST(request) {
     let isValid = false
     let context = null
     
-    // 如果提供了keyId，尝试获取上下文信息（仅限Azure OpenAI）
-    if (keyId && keyType.toLowerCase() === 'azure_openai') {
+    // 如果提供了keyId，尝试获取上下文信息（适用于所有OpenAI类型）
+    const openaiTypes = ['azure_openai', 'openai', 'openai_org', 'openai_project', 'openai_user', 'openai_service', 'deepseek']
+    if (keyId && openaiTypes.includes(keyType.toLowerCase())) {
       try {
         const { data: keyData } = await supabase
           .from('leaked_keys')
@@ -278,7 +356,7 @@ export async function POST(request) {
           context = keyData.leaked_keys_sensitive.raw_context
         }
       } catch (error) {
-        console.log('Failed to fetch context for Azure OpenAI:', error.message)
+        console.log('Failed to fetch context for OpenAI key:', error.message)
       }
     }
 
@@ -290,7 +368,7 @@ export async function POST(request) {
       case 'openai_user':
       case 'openai_service':
       case 'deepseek':
-        isValid = await verifyOpenAI(key)
+        isValid = await verifyOpenAI(key, context)
         break
       case 'anthropic':
         isValid = await verifyAnthropic(key)
