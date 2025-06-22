@@ -69,6 +69,49 @@ async function verifyReplicate(key) {
   }
 }
 
+// 添加新的验证函数
+async function verifyOpenRouter(key) {
+  try {
+    const response = await fetch('https://openrouter.ai/api/v1/models', {
+      headers: { 'Authorization': `Bearer ${key}` }
+    })
+    return response.ok
+  } catch {
+    return false
+  }
+}
+
+async function verifyPerplexity(key) {
+  try {
+    const response = await fetch('https://api.perplexity.ai/chat/completions', {
+      method: 'POST',
+      headers: { 
+        'Authorization': `Bearer ${key}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'llama-3.1-sonar-small-128k-online',
+        messages: [{ role: 'user', content: 'test' }],
+        max_tokens: 1
+      })
+    })
+    return response.status !== 401 && response.status !== 403
+  } catch {
+    return false
+  }
+}
+
+async function verifyGroq(key) {
+  try {
+    const response = await fetch('https://api.groq.com/openai/v1/models', {
+      headers: { 'Authorization': `Bearer ${key}` }
+    })
+    return response.ok
+  } catch {
+    return false
+  }
+}
+
 export async function POST(request) {
   try {
     const { keyType, key } = await request.json()
@@ -83,15 +126,25 @@ export async function POST(request) {
     switch (keyType.toLowerCase()) {
       case 'openai':
       case 'openai_org':
-      case 'stability':
+      case 'deepseek':
         isValid = await verifyOpenAI(key)
         break
       case 'anthropic':
         isValid = await verifyAnthropic(key)
         break
+      case 'openrouter':
+        isValid = await verifyOpenRouter(key)
+        break
+      case 'perplexity':
+        isValid = await verifyPerplexity(key)
+        break
+      case 'groq':
+        isValid = await verifyGroq(key)
+        break
       case 'google':
       case 'google_service':
       case 'palm':
+      case 'gemini':
         isValid = await verifyGoogle(key)
         break
       case 'huggingface':
@@ -100,6 +153,25 @@ export async function POST(request) {
       case 'replicate':
         isValid = await verifyReplicate(key)
         break
+      case 'stability':
+        isValid = await verifyOpenAI(key) // Stability API类似OpenAI
+        break
+      case 'fireworks':
+      case 'anyscale':
+      case 'voyage':
+      case 'together':
+      case 'cohere':
+      case 'elevenlabs':
+      case 'runpod':
+      case 'azure_openai':
+      case 'mistral':
+      case 'vertex_ai':
+        // 这些服务需要特殊验证方法，暂时标记为无法验证
+        return Response.json({ 
+          isValid: false,
+          message: '暂不支持该服务的自动验证',
+          keyType 
+        })
       default:
         return Response.json({ 
           error: '不支持的密钥类型',

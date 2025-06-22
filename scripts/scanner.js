@@ -2,7 +2,7 @@ const { Octokit } = require('@octokit/rest');
 const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
 
-// API密钥检测模式 - 修复版本，按优先级排序
+// API密钥检测模式 - 扩展版本，按优先级排序
 const KEY_PATTERNS = {
   // 高特异性模式（优先检测）
   anthropic: {
@@ -20,6 +20,11 @@ const KEY_PATTERNS = {
     name: 'OpenAI Organization',
     confidence: 'high'
   },
+  openrouter: {
+    pattern: /sk-or-v1-[a-zA-Z0-9]{64}/g,
+    name: 'OpenRouter',
+    confidence: 'high'
+  },
   huggingface: {
     pattern: /hf_[a-zA-Z0-9]{34}/g,
     name: 'HuggingFace',
@@ -29,6 +34,17 @@ const KEY_PATTERNS = {
     pattern: /r8_[a-zA-Z0-9]{40}/g,
     name: 'Replicate',
     confidence: 'high'
+  },
+  perplexity: {
+    pattern: /pplx-[a-zA-Z0-9]{56}/g,
+    name: 'Perplexity AI',
+    confidence: 'high'
+  },
+  deepseek: {
+    pattern: /sk-[a-zA-Z0-9]{48}/g,
+    name: 'DeepSeek',
+    confidence: 'medium',
+    context_required: ['deepseek']
   },
   google: {
     pattern: /AIza[0-9A-Za-z_-]{35}/g,
@@ -40,25 +56,65 @@ const KEY_PATTERNS = {
     name: 'Google PaLM',
     confidence: 'high'
   },
+  gemini: {
+    pattern: /AIza[0-9A-Za-z_-]{35}/g,
+    name: 'Google Gemini',
+    confidence: 'high'
+  },
+  fireworks: {
+    pattern: /fw_[a-zA-Z0-9]{32,48}/g,
+    name: 'Fireworks AI',
+    confidence: 'high'
+  },
+  groq: {
+    pattern: /gsk_[a-zA-Z0-9]{52}/g,
+    name: 'Groq',
+    confidence: 'high'
+  },
+  anyscale: {
+    pattern: /esecret_[a-zA-Z0-9]{32}/g,
+    name: 'Anyscale',
+    confidence: 'high'
+  },
+  voyage: {
+    pattern: /pa-[a-zA-Z0-9_-]{43}/g,
+    name: 'Voyage AI',
+    confidence: 'high'
+  },
   stability: {
     pattern: /sk-[a-zA-Z0-9]{48}/g,
     name: 'Stability AI',
-    confidence: 'medium'
+    confidence: 'medium',
+    context_required: ['stability', 'stable']
+  },
+  elevenlabs: {
+    pattern: /[a-f0-9]{32}/g,
+    name: 'ElevenLabs',
+    confidence: 'low',
+    context_required: ['elevenlabs', 'eleven']
+  },
+  runpod: {
+    pattern: /[A-Z0-9]{8}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{12}/g,
+    name: 'RunPod',
+    confidence: 'medium',
+    context_required: ['runpod']
+  },
+  together: {
+    pattern: /[a-f0-9]{64}/g,
+    name: 'Together AI',
+    confidence: 'low',
+    context_required: ['together']
+  },
+  cohere: {
+    pattern: /[a-zA-Z0-9]{40}/g,
+    name: 'Cohere',
+    confidence: 'low',
+    context_required: ['cohere']
   },
   google_service: {
     pattern: /"private_key":\s*"[^"]*"/g,
     name: 'Google Service Account',
     confidence: 'medium'
-  },
-  cohere: {
-    pattern: /[a-zA-Z0-9]{8}-[a-zA-Z0-9]{4}-[a-zA-Z0-9]{4}-[a-zA-Z0-9]{4}-[a-zA-Z0-9]{12}/g,
-    name: 'Cohere',
-    confidence: 'medium'
-  },
-  together: {
-    pattern: /[a-zA-Z0-9]{64}/g,
-    name: 'Together AI',
-    confidence: 'low'
   },
   // 低特异性模式（最后检测，避免误匹配）
   azure_openai: {
@@ -72,6 +128,12 @@ const KEY_PATTERNS = {
     name: 'Mistral AI',
     confidence: 'low',
     context_required: ['mistral']
+  },
+  vertex_ai: {
+    pattern: /[a-zA-Z0-9_-]{20,}/g,
+    name: 'Google Vertex AI',
+    confidence: 'low',
+    context_required: ['vertex', 'gcp', 'google-cloud']
   }
 };
 
@@ -111,30 +173,59 @@ class APIKeyScanner {
       // 最近活跃的仓库扫描 - 使用pushed而不是created
       const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
       queries = [
+        // OpenAI系列
         `"sk-" language:python NOT is:fork`,
         `"sk-" language:javascript NOT is:fork`,
+        // 新增AI服务
+        `"sk-or-v1-" language:python NOT is:fork`,  // OpenRouter
+        `"pplx-" language:python NOT is:fork`,      // Perplexity
+        `"gsk_" language:python NOT is:fork`,       // Groq
+        `"fw_" language:python NOT is:fork`,        // Fireworks
+        `"pa-" language:python NOT is:fork`,        // Voyage AI
+        `"esecret_" language:python NOT is:fork`,   // Anyscale
+        // Google系列
         `"AIza" language:python NOT is:fork`,
+        // HuggingFace & Replicate
         `"hf_" language:python NOT is:fork`,
         `"r8_" language:python NOT is:fork`,
+        // API Key变量名搜索
         `openai_api_key language:python`,
         `anthropic_api_key language:python`,
-        // 添加最近推送的仓库
+        `openrouter_api_key language:python`,
+        `groq_api_key language:python`,
+        // 最近推送的仓库
         `"sk-" pushed:>${yesterday} NOT is:fork`,
         `"AIza" pushed:>${yesterday} NOT is:fork`,
       ];
     } else {
       // 全面扫描 - 使用更广泛的搜索
       queries = [
-        // 基础搜索 - 应该能找到结果
+        // OpenAI系列
         `"sk-" language:python NOT is:fork`,
         `"sk-" language:javascript NOT is:fork`,
+        // 新增AI服务特征搜索
+        `"sk-or-v1" NOT is:fork`,               // OpenRouter
+        `"pplx-" NOT is:fork`,                  // Perplexity
+        `"gsk_" NOT is:fork`,                   // Groq
+        `"fw_" NOT is:fork`,                    // Fireworks
+        `"esecret_" NOT is:fork`,               // Anyscale
+        `"pa-" NOT is:fork`,                    // Voyage AI
+        // Google系列
         `"AIza" language:python NOT is:fork`,  
+        // HuggingFace & Replicate
         `"hf_" language:python NOT is:fork`,
+        `"r8_" language:python NOT is:fork`,
+        // 通用API Key搜索
         `"api_key" language:python`,
         `"OPENAI_API_KEY" NOT is:fork`,
-        `"openai" "sk-" NOT is:fork`,
+        `"ANTHROPIC_API_KEY" NOT is:fork`,
+        `"GROQ_API_KEY" NOT is:fork`,
+        `"OPENROUTER_API_KEY" NOT is:fork`,
+        // 导入语句搜索
         `"import openai" language:python`,
-        // 扩展搜索
+        `"from anthropic" language:python`,
+        `"import groq" language:python`,
+        // 文件扩展名搜索
         `sk- extension:py NOT is:fork`,
         `sk- extension:js NOT is:fork`,
         `AIza extension:py NOT is:fork`,
@@ -142,6 +233,8 @@ class APIKeyScanner {
         // 配置文件搜索
         `"sk-" filename:.env`,
         `"OPENAI_API_KEY" filename:.env`,
+        `"ANTHROPIC_API_KEY" filename:.env`,
+        `"GROQ_API_KEY" filename:.env`,
       ];
     }
 
