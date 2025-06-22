@@ -97,51 +97,47 @@ class APIKeyScanner {
 
   async scanRecent() {
     const scanType = process.env.SCAN_TYPE || 'recent';
-    let dateFilter = '';
     
-    if (scanType === 'recent') {
-      // 最近1天
-      const today = new Date().toISOString().split('T')[0];
-      dateFilter = `created:>${today}`;
-    } else if (scanType === 'full') {
-      // 最近7天的全面扫描
-      const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-      dateFilter = `created:>${weekAgo}`;
-    }
+    console.log(`📅 Scan mode: ${scanType}`);
     
-    console.log(`📅 Scan mode: ${scanType} (${dateFilter})`);
-    
-    // 优化搜索策略 - GitHub API限制友好
+    // 修复搜索策略 - 移除过严格的日期限制
     let queries = [];
     
     if (scanType === 'recent') {
-      // 今日扫描 - 使用精确搜索
+      // 最近活跃的仓库扫描 - 使用pushed而不是created
+      const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
       queries = [
-        `"sk-" ${dateFilter}`,
-        `"sk-ant-" ${dateFilter}`,
-        `"AIza" ${dateFilter}`,
-        `"hf_" ${dateFilter}`,
-        `"r8_" ${dateFilter}`,
-        `"OPENAI_API_KEY" ${dateFilter}`,
-        `"ANTHROPIC_API_KEY" ${dateFilter}`,
+        `"sk-" language:python NOT is:fork`,
+        `"sk-" language:javascript NOT is:fork`,
+        `"AIza" language:python NOT is:fork`,
+        `"hf_" language:python NOT is:fork`,
+        `"r8_" language:python NOT is:fork`,
+        `openai_api_key language:python`,
+        `anthropic_api_key language:python`,
+        // 添加最近推送的仓库
+        `"sk-" pushed:>${yesterday} NOT is:fork`,
+        `"AIza" pushed:>${yesterday} NOT is:fork`,
       ];
     } else {
-      // 全面扫描 - 使用更广泛的搜索，先测试几个常见的
+      // 全面扫描 - 使用更广泛的搜索
       queries = [
-        // 最常见的搜索词，应该能找到结果
-        `"sk-" language:python`,
-        `"sk-" language:javascript`,
-        `"AIza" language:python`,  
-        `"hf_" language:python`,
+        // 基础搜索 - 应该能找到结果
+        `"sk-" language:python NOT is:fork`,
+        `"sk-" language:javascript NOT is:fork`,
+        `"AIza" language:python NOT is:fork`,  
+        `"hf_" language:python NOT is:fork`,
         `"api_key" language:python`,
-        `"OPENAI_API_KEY"`,
-        `"openai" "sk-"`,
-        `"import openai"`,
-        // 如果基础搜索有结果，再尝试更具体的
-        `sk- extension:py`,
-        `sk- extension:js`,
-        `AIza extension:py`,
-        `hf_ extension:py`,
+        `"OPENAI_API_KEY" NOT is:fork`,
+        `"openai" "sk-" NOT is:fork`,
+        `"import openai" language:python`,
+        // 扩展搜索
+        `sk- extension:py NOT is:fork`,
+        `sk- extension:js NOT is:fork`,
+        `AIza extension:py NOT is:fork`,
+        `hf_ extension:py NOT is:fork`,
+        // 配置文件搜索
+        `"sk-" filename:.env`,
+        `"OPENAI_API_KEY" filename:.env`,
       ];
     }
 

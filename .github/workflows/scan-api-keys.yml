@@ -1,0 +1,65 @@
+name: API Key Scanner
+
+on:
+  schedule:
+    # 每30分钟运行一次
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+    inputs:
+      scan_type:
+        description: 'Scan Type'
+        required: false
+        default: 'recent'
+        type: choice
+        options:
+        - recent
+        - full
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        
+    - name: Install dependencies
+      run: npm install @octokit/rest @supabase/supabase-js crypto
+      
+    - name: Run API Key Scanner
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        SCAN_TYPE: ${{ github.event.inputs.scan_type || 'recent' }}
+      run: |
+        echo "🔍 Starting API Key Scan..."
+        echo "Scan Type: $SCAN_TYPE"
+        echo "GitHub Token: $(echo $GITHUB_TOKEN | head -c 10)***"
+        echo "Supabase URL: $SUPABASE_URL"
+        echo "Service Key: $(echo $SUPABASE_SERVICE_KEY | head -c 10)***"
+        
+        # 运行扫描器
+        node scripts/scanner.js
+        
+        # 检查扫描结果
+        if [ $? -eq 0 ]; then
+          echo "✅ Scan completed successfully"
+        else
+          echo "❌ Scan failed"
+          exit 1
+        fi
+
+    - name: Upload scan logs
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: scan-logs-${{ github.run_number }}
+        path: |
+          *.log
+        retention-days: 7
