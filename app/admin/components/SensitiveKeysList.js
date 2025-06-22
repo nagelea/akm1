@@ -140,13 +140,21 @@ export default function SensitiveKeysList({ user, onStatsChange }) {
       const { isValid } = await response.json()
 
       // 更新数据库状态
-      await supabase
-        .from('leaked_keys')
-        .update({ 
+      const statusUpdateResponse = await fetch('/api/update-key-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          keyId: keyId,
           status: isValid ? 'valid' : 'invalid',
-          last_verified: new Date().toISOString()
+          lastVerified: new Date().toISOString()
         })
-        .eq('id', keyId)
+      })
+
+      const updateResult = await statusUpdateResponse.json()
+      
+      if (!statusUpdateResponse.ok || !updateResult.success) {
+        throw new Error('数据库更新失败: ' + (updateResult.error || updateResult.details || 'Unknown error'))
+      }
 
       alert(`密钥验证结果: ${isValid ? '有效' : '无效'}`)
       fetchKeys() // 刷新列表

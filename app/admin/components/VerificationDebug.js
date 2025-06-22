@@ -68,21 +68,25 @@ export default function VerificationDebug({ onStatsChange }) {
         try {
           console.log(`Updating key ${key.id} from ${key.status} to ${testStatus}`)
           
-          const { data: updateData, error: updateError } = await supabase
-            .from('leaked_keys')
-            .update({ 
+          // 使用API端点更新状态
+          const response = await fetch('/api/update-key-status', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              keyId: key.id,
               status: testStatus,
-              last_verified: new Date().toISOString()
+              lastVerified: new Date().toISOString()
             })
-            .eq('id', key.id)
-            .select()
+          })
 
-          if (updateError) {
-            console.error('Update error:', updateError)
-            throw new Error('更新失败: ' + updateError.message)
+          const result = await response.json()
+          
+          if (!response.ok || !result.success) {
+            console.error('Update error:', result)
+            throw new Error('更新失败: ' + (result.error || result.details || 'Unknown error'))
           }
 
-          console.log('Update result:', updateData)
+          console.log('Update result:', result)
 
           results.push({
             id: key.id,
@@ -128,36 +132,21 @@ export default function VerificationDebug({ onStatsChange }) {
     setResult(null)
 
     try {
-      // 先获取所有密钥ID，然后批量更新
-      const { data: allKeys, error: fetchError } = await supabase
-        .from('leaked_keys')
-        .select('id')
+      // 使用API端点重置所有状态
+      const response = await fetch('/api/reset-all-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      })
+
+      const result = await response.json()
       
-      if (fetchError) {
-        throw new Error('获取密钥列表失败: ' + fetchError.message)
-      }
-
-      if (!allKeys || allKeys.length === 0) {
-        throw new Error('没有找到任何密钥')
-      }
-
-      // 使用IN子句批量更新
-      const keyIds = allKeys.map(k => k.id)
-      const { error } = await supabase
-        .from('leaked_keys')
-        .update({ 
-          status: 'unknown',
-          last_verified: null
-        })
-        .in('id', keyIds)
-
-      if (error) {
-        throw new Error('重置状态失败: ' + error.message)
+      if (!response.ok || !result.success) {
+        throw new Error('重置状态失败: ' + (result.error || result.details || 'Unknown error'))
       }
 
       setResult({
         success: true,
-        message: '所有密钥状态已重置为unknown'
+        message: result.message || '所有密钥状态已重置为unknown'
       })
 
       // 刷新统计数据
@@ -219,17 +208,21 @@ export default function VerificationDebug({ onStatsChange }) {
       const apiResult = await response.json()
       console.log('API result:', apiResult)
 
-      // 更新数据库
-      const { error: updateError } = await supabase
-        .from('leaked_keys')
-        .update({ 
+      // 更新数据库状态
+      const statusUpdateResponse = await fetch('/api/update-key-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          keyId: key.id,
           status: apiResult.isValid ? 'valid' : 'invalid',
-          last_verified: new Date().toISOString()
+          lastVerified: new Date().toISOString()
         })
-        .eq('id', key.id)
+      })
 
-      if (updateError) {
-        throw new Error('数据库更新失败: ' + updateError.message)
+      const updateResult = await statusUpdateResponse.json()
+      
+      if (!statusUpdateResponse.ok || !updateResult.success) {
+        throw new Error('数据库更新失败: ' + (updateResult.error || updateResult.details || 'Unknown error'))
       }
 
       setResult({
