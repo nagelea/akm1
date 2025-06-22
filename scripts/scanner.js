@@ -379,6 +379,9 @@ class APIKeyScanner {
         raw_context: rawContext,
         github_url: githubUrl
       });
+
+      // 自动验证新发现的密钥
+      await this.autoVerifyKey(keyRecord.id, type, key);
     }
 
     if (!error) {
@@ -442,6 +445,150 @@ class APIKeyScanner {
     
     // 检查是否包含必需的上下文关键词
     return requiredContexts.some(ctx => context.includes(ctx.toLowerCase()));
+  }
+
+  async autoVerifyKey(keyId, keyType, fullKey) {
+    try {
+      console.log(`🔍 Auto-verifying ${keyType} key ${keyId}...`);
+
+      // 调用验证API
+      const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/verify-key`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_KEY}`
+        },
+        body: JSON.stringify({
+          keyType: keyType,
+          key: fullKey
+        })
+      });
+
+      if (!response.ok) {
+        // 如果API endpoint不可用，使用本地验证逻辑
+        const verificationResult = await this.localVerifyKey(keyType, fullKey);
+        await this.updateKeyStatus(keyId, verificationResult.isValid);
+        console.log(`✅ Auto-verification completed for key ${keyId}: ${verificationResult.isValid ? 'valid' : 'invalid'}`);
+        return;
+      }
+
+      const result = await response.json();
+      await this.updateKeyStatus(keyId, result.isValid);
+      console.log(`✅ Auto-verification completed for key ${keyId}: ${result.isValid ? 'valid' : 'invalid'}`);
+
+    } catch (error) {
+      console.error(`❌ Auto-verification failed for key ${keyId}:`, error.message);
+      // 验证失败时，保持状态为 unknown
+    }
+  }
+
+  async localVerifyKey(keyType, key) {
+    // 简化的本地验证逻辑（避免外部API依赖）
+    try {
+      switch (keyType.toLowerCase()) {
+        case 'openai':
+        case 'openai_org':
+        case 'deepseek':
+          return await this.verifyOpenAI(key);
+        case 'anthropic':
+          return await this.verifyAnthropic(key);
+        case 'google':
+        case 'google_service':
+        case 'palm':
+        case 'gemini':
+          return await this.verifyGoogle(key);
+        case 'huggingface':
+          return await this.verifyHuggingFace(key);
+        case 'replicate':
+          return await this.verifyReplicate(key);
+        default:
+          // 不支持自动验证的服务
+          return { isValid: false, message: '暂不支持该服务的自动验证' };
+      }
+    } catch (error) {
+      return { isValid: false, message: '验证过程中发生错误' };
+    }
+  }
+
+  async verifyOpenAI(key) {
+    try {
+      const response = await fetch('https://api.openai.com/v1/models', {
+        headers: { 'Authorization': `Bearer ${key}` }
+      });
+      return { isValid: response.ok };
+    } catch {
+      return { isValid: false };
+    }
+  }
+
+  async verifyAnthropic(key) {
+    try {
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 
+          'x-api-key': key,
+          'Content-Type': 'application/json',
+          'anthropic-version': '2023-06-01'
+        },
+        body: JSON.stringify({
+          model: 'claude-3-haiku-20240307',
+          max_tokens: 1,
+          messages: [{ role: 'user', content: 'test' }]
+        })
+      });
+      return { isValid: response.status !== 401 && response.status !== 403 };
+    } catch {
+      return { isValid: false };
+    }
+  }
+
+  async verifyGoogle(key) {
+    try {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`);
+      return { isValid: response.ok };
+    } catch {
+      return { isValid: false };
+    }
+  }
+
+  async verifyHuggingFace(key) {
+    try {
+      const response = await fetch('https://huggingface.co/api/whoami', {
+        headers: { 'Authorization': `Bearer ${key}` }
+      });
+      return { isValid: response.ok };
+    } catch {
+      return { isValid: false };
+    }
+  }
+
+  async verifyReplicate(key) {
+    try {
+      const response = await fetch('https://api.replicate.com/v1/account', {
+        headers: { 'Authorization': `Token ${key}` }
+      });
+      return { isValid: response.ok };
+    } catch {
+      return { isValid: false };
+    }
+  }
+
+  async updateKeyStatus(keyId, isValid) {
+    try {
+      const { error } = await this.supabase
+        .from('leaked_keys')
+        .update({
+          status: isValid ? 'valid' : 'invalid',
+          last_verified: new Date().toISOString()
+        })
+        .eq('id', keyId);
+
+      if (error) {
+        console.error('Failed to update key status:', error);
+      }
+    } catch (error) {
+      console.error('Error updating key status:', error);
+    }
   }
 
   maskKey(key) {

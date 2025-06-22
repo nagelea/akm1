@@ -112,7 +112,7 @@ export default function KeyStatistics({ keys, onFilterChange }) {
   return (
     <div className="space-y-6">
       {/* 总体统计卡片 */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
         <div className="bg-blue-50 rounded-lg p-4">
           <div className="text-2xl font-bold text-blue-600">{stats.total}</div>
           <div className="text-sm text-blue-600">总密钥数</div>
@@ -128,6 +128,10 @@ export default function KeyStatistics({ keys, onFilterChange }) {
         <div className="bg-orange-50 rounded-lg p-4">
           <div className="text-2xl font-bold text-orange-600">{stats.bySeverity.high || 0}</div>
           <div className="text-sm text-orange-600">高风险密钥</div>
+        </div>
+        <div className="bg-gray-50 rounded-lg p-4">
+          <div className="text-2xl font-bold text-gray-600">{stats.byStatus.unknown || 0}</div>
+          <div className="text-sm text-gray-600">待验证密钥</div>
         </div>
       </div>
 

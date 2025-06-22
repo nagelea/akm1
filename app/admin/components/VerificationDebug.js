@@ -533,8 +533,29 @@ export default function VerificationDebug({ onStatsChange }) {
           </div>
         )}
 
+        <div className="bg-blue-50 border border-blue-200 rounded p-4">
+          <h4 className="font-medium text-blue-800 mb-2">🤖 自动验证系统</h4>
+          <div className="text-sm text-blue-700 space-y-2">
+            <div className="flex items-center space-x-2">
+              <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+              <span><strong>新密钥自动验证</strong>: 扫描器发现新密钥时自动验证</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+              <span><strong>定时批量验证</strong>: 每天6点自动验证未验证的密钥</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <span className="w-2 h-2 bg-purple-500 rounded-full"></span>
+              <span><strong>智能跳过</strong>: 避免重复验证已确认的密钥</span>
+            </div>
+          </div>
+          <div className="mt-3 text-xs text-blue-600">
+            💡 大多数情况下，您不需要手动验证。系统会自动处理新发现的密钥。
+          </div>
+        </div>
+
         <div className="text-sm text-gray-500">
-          <p>说明:</p>
+          <p>手动操作说明:</p>
           <ul className="list-disc list-inside space-y-1 mt-1">
             <li><strong>批量验证所有密钥</strong>: 逐个验证所有有完整数据的密钥，调用真实API检查有效性</li>
             <li>批量测试: 将前5个密钥分别设置为valid/invalid/unknown状态（仅测试用）</li>
@@ -544,7 +565,7 @@ export default function VerificationDebug({ onStatsChange }) {
           </ul>
           <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded">
             <p className="text-xs text-yellow-700">
-              ⚠️ 批量验证会逐个调用真实API，可能需要较长时间。过程中会有1秒延迟以避免速率限制。
+              ⚠️ 手动批量验证会逐个调用真实API，可能需要较长时间。过程中会有1秒延迟以避免速率限制。
             </p>
           </div>
         </div>
