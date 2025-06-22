@@ -9,89 +9,122 @@ export default function AdminPage() {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [retryCount, setRetryCount] = useState(0)
+
+  // 重置错误状态的函数
+  const resetError = () => {
+    setError(null)
+    setLoading(true)
+  }
+
+  // 检查认证状态的函数
+  const checkAuth = async () => {
+    try {
+      console.log('Checking auth... (attempt:', retryCount + 1, ')')
+      
+      // 重置状态
+      setError(null)
+      setLoading(true)
+      
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      
+      if (sessionError) {
+        console.error('Session error:', sessionError)
+        throw new Error('认证服务连接失败: ' + sessionError.message)
+      }
+      
+      if (session?.user) {
+        console.log('User found:', session.user.email)
+        
+        // 验证是否为管理员
+        const { data: adminUser, error: adminError } = await supabase
+          .from('admin_users')
+          .select('*')
+          .eq('email', session.user.email)
+          .single()
+        
+        if (adminError) {
+          console.error('Admin check error:', adminError)
+          // 如果是数据未找到错误，提供更友好的提示
+          if (adminError.code === 'PGRST116') {
+            throw new Error('该账户不是管理员账户')
+          } else {
+            throw new Error('管理员验证失败: ' + adminError.message)
+          }
+        }
+        
+        if (adminUser) {
+          console.log('Admin user found:', adminUser)
+          setUser({ ...session.user, role: adminUser.role })
+          setError(null) // 确保清除错误状态
+        }
+      } else {
+        console.log('No session found - showing login form')
+        setUser(null)
+        setError(null)
+      }
+    } catch (error) {
+      console.error('Auth check failed:', error)
+      setError(error.message)
+      setUser(null)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
     // 设置超时处理
     const timeout = setTimeout(() => {
       if (loading) {
-        setError('加载超时，请检查网络连接和数据库配置')
+        setError('加载超时，请检查网络连接')
         setLoading(false)
       }
-    }, 10000) // 10秒超时
-
-    // 检查登录状态
-    const checkAuth = async () => {
-      try {
-        console.log('Checking auth...')
-        console.log('Supabase URL:', process.env.NEXT_PUBLIC_SUPABASE_URL)
-        console.log('Anon Key configured:', !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
-        
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-        
-        if (sessionError) {
-          console.error('Session error:', sessionError)
-          setError('认证服务连接失败: ' + sessionError.message)
-          setLoading(false)
-          clearTimeout(timeout)
-          return
-        }
-        
-        if (session?.user) {
-          console.log('User found:', session.user.email)
-          // 验证是否为管理员
-          const { data: adminUser, error: adminError } = await supabase
-            .from('admin_users')
-            .select('*')
-            .eq('email', session.user.email)
-            .single()
-          
-          if (adminError) {
-            console.error('Admin check error:', adminError)
-            setError('管理员验证失败: ' + adminError.message)
-          }
-          
-          if (adminUser) {
-            console.log('Admin user found:', adminUser)
-            setUser({ ...session.user, role: adminUser.role })
-          } else {
-            console.log('No admin user found for:', session.user.email)
-            setError('未找到管理员账户，请检查admin_users表')
-          }
-        } else {
-          console.log('No session found')
-        }
-      } catch (error) {
-        console.error('Auth check failed:', error)
-        setError('认证检查失败: ' + error.message)
-      } finally {
-        setLoading(false)
-        clearTimeout(timeout)
-      }
-    }
+    }, 8000) // 减少到8秒超时
 
     checkAuth()
 
     // 监听认证状态变化
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        console.log('Auth state changed:', event)
+        
         if (event === 'SIGNED_OUT') {
           setUser(null)
+          setError(null)
         } else if (event === 'SIGNED_IN' && session?.user) {
-          const { data: adminUser } = await supabase
-            .from('admin_users')
-            .select('*')
-            .eq('email', session.user.email)
-            .single()
+          setLoading(true)
+          setError(null)
           
-          if (adminUser) {
-            setUser({ ...session.user, role: adminUser.role })
+          try {
+            const { data: adminUser, error: adminError } = await supabase
+              .from('admin_users')
+              .select('*')
+              .eq('email', session.user.email)
+              .single()
+            
+            if (adminError) {
+              if (adminError.code === 'PGRST116') {
+                setError('该账户不是管理员账户')
+              } else {
+                setError('管理员验证失败: ' + adminError.message)
+              }
+            } else if (adminUser) {
+              setUser({ ...session.user, role: adminUser.role })
+            }
+          } catch (error) {
+            setError('验证过程发生错误: ' + error.message)
+          } finally {
+            setLoading(false)
           }
         }
       }
     )
 
-    return () => subscription.unsubscribe()
-  }, [])
+    return () => {
+      clearTimeout(timeout)
+      subscription.unsubscribe()
+    }
+  }, [retryCount]) // 依赖retryCount以便重试时重新执行
 
   if (loading) {
     return (
@@ -113,18 +146,49 @@ export default function AdminPage() {
             <div className="text-red-500 text-4xl mb-4">⚠️</div>
             <h2 className="text-xl font-semibold text-gray-900 mb-2">加载失败</h2>
             <p className="text-gray-600 mb-4">{error}</p>
-            <button 
-              onClick={() => window.location.reload()}
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-            >
-              重新加载
-            </button>
+            
+            <div className="space-y-2">
+              <button 
+                onClick={() => {
+                  setRetryCount(prev => prev + 1)
+                  resetError()
+                }}
+                className="w-full px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              >
+                重试
+              </button>
+              
+              <button 
+                onClick={() => {
+                  // 清除所有本地存储的认证信息
+                  localStorage.clear()
+                  sessionStorage.clear()
+                  window.location.reload()
+                }}
+                className="w-full px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+              >
+                清除缓存并重新加载
+              </button>
+              
+              <button 
+                onClick={() => {
+                  setUser(null)
+                  setError(null)
+                  setLoading(false)
+                }}
+                className="w-full px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+              >
+                返回登录页面
+              </button>
+            </div>
+            
             <div className="mt-4 text-sm text-gray-500">
-              <p>请检查：</p>
+              <p>常见解决方案：</p>
               <ul className="text-left mt-2 space-y-1">
-                <li>• Supabase配置是否正确</li>
-                <li>• 网络连接是否正常</li>
-                <li>• admin_users表是否存在</li>
+                <li>• 使用 admin@test.com / temp123 登录</li>
+                <li>• 清除浏览器缓存</li>
+                <li>• 检查网络连接</li>
+                <li>• 确认Supabase配置正确</li>
               </ul>
             </div>
           </div>

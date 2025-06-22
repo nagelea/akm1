@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import supabase from '../../../lib/supabase'
+import auth from '../../../lib/auth'
 
 export default function AdminLogin() {
   const [email, setEmail] = useState('')
