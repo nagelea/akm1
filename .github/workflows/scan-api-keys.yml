@@ -2,8 +2,8 @@ name: API Key Scanner
 
 on:
   schedule:
-    # 每30分钟运行一次
-    - cron: '*/30 * * * *'
+    # 每6小时运行一次 (4次/天: 0:00, 6:00, 12:00, 18:00)
+    - cron: '0 */6 * * *'
   workflow_dispatch:
     inputs:
       scan_type:
