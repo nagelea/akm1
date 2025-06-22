@@ -151,14 +151,9 @@ export default function AdminLogin() {
           </div>
 
           <div className="text-center">
-            <p className="text-xs text-gray-500 mb-2">
+            <p className="text-xs text-gray-500">
               仅限授权管理员访问敏感数据
             </p>
-            <div className="text-xs text-gray-400 bg-gray-50 rounded p-2">
-              <p className="font-medium">测试账户:</p>
-              <p>邮箱: admin@test.com</p>
-              <p>密码: temp123</p>
-            </div>
           </div>
         </form>
       </div>
