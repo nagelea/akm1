@@ -2,6 +2,15 @@
 
 实时监控GitHub上泄露的AI API密钥，包括OpenAI、Anthropic、Google AI等主流服务商。
 
+## 🚀 一键部署
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fnagelea%2Fakm1&env=SUPABASE_URL,SUPABASE_SERVICE_KEY,NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SUPABASE_ANON_KEY&envDescription=Supabase%20configuration%20required&envLink=https%3A%2F%2Fgithub.com%2Fnagelea%2Fakm1%23%E7%8E%AF%E5%A2%83%E5%8F%98%E9%87%8F%E8%AE%BE%E7%BD%AE&project-name=ai-api-key-monitor&repository-name=ai-api-key-monitor)
+
+**一键部署后还需要：**
+1. 配置Supabase数据库（执行SQL脚本）
+2. 设置GitHub Secrets（用于Actions）
+3. 创建管理员账户
+
 ## 🚀 功能特性
 
 - **实时监控**: 每30分钟自动扫描GitHub最新代码
@@ -28,6 +37,8 @@ Next.js App ←─── 用户界面 + 管理后台
 ```
 
 ## 📦 快速开始
+
+> 💡 **想要最快部署？** 点击上方的 "Deploy with Vercel" 按钮一键部署！
 
 ### 1. 环境准备
 
@@ -158,6 +169,10 @@ npm run start
 
 ### Vercel部署（推荐）
 
+#### 方式一：一键部署（推荐）
+点击上方的 "Deploy with Vercel" 按钮，自动部署到Vercel。
+
+#### 方式二：CLI部署
 ```bash
 # 安装Vercel CLI
 npm i -g vercel
@@ -171,6 +186,25 @@ vercel env add SUPABASE_SERVICE_KEY
 vercel env add NEXT_PUBLIC_SUPABASE_URL  
 vercel env add NEXT_PUBLIC_SUPABASE_ANON_KEY
 ```
+
+#### 部署后配置步骤
+
+1. **配置环境变量**（如果一键部署未自动配置）
+   ```
+   SUPABASE_URL=https://your-project.supabase.co
+   SUPABASE_SERVICE_KEY=your-service-key
+   NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+   ```
+
+2. **设置GitHub Secrets**（用于Actions自动扫描）
+   - 进入GitHub仓库 Settings > Secrets
+   - 添加 `SUPABASE_URL` 和 `SUPABASE_SERVICE_KEY`
+
+3. **启用GitHub Actions**
+   - 确保Actions已启用
+   - 扫描器每30分钟自动运行
+   - 验证器每天6点自动运行
 
 ### 手动部署
 
