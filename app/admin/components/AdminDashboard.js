@@ -162,8 +162,8 @@ export default function AdminDashboard({ user }) {
 
           {/* 选项卡内容 */}
           <div className="p-6">
-            {activeTab === 'keys' && <SensitiveKeysList user={user} />}
-            {activeTab === 'debug' && <VerificationDebug />}
+            {activeTab === 'keys' && <SensitiveKeysList user={user} onStatsChange={fetchStats} />}
+            {activeTab === 'debug' && <VerificationDebug onStatsChange={fetchStats} />}
             {activeTab === 'logs' && <AccessLogsList user={user} />}
             {activeTab === 'users' && user.role === 'admin' && <UserManagement />}
           </div>

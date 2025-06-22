@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import supabase from '../../../lib/supabase'
 import KeyStatistics from './KeyStatistics'
 
-export default function SensitiveKeysList({ user }) {
+export default function SensitiveKeysList({ user, onStatsChange }) {
   const [keys, setKeys] = useState([])
   const [filteredKeys, setFilteredKeys] = useState([])
   const [loading, setLoading] = useState(true)
@@ -150,6 +150,11 @@ export default function SensitiveKeysList({ user }) {
 
       alert(`密钥验证结果: ${isValid ? '有效' : '无效'}`)
       fetchKeys() // 刷新列表
+      
+      // 刷新统计数据
+      if (onStatsChange) {
+        onStatsChange()
+      }
     } catch (error) {
       console.error('Verification failed:', error)
       alert('验证失败')

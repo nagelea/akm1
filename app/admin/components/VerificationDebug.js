@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import supabase from '../../../lib/supabase'
 
-export default function VerificationDebug() {
+export default function VerificationDebug({ onStatsChange }) {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState(null)
 
@@ -68,6 +68,11 @@ export default function VerificationDebug() {
         results: results
       })
 
+      // 刷新统计数据
+      if (onStatsChange) {
+        onStatsChange()
+      }
+
     } catch (error) {
       console.error('Batch verification failed:', error)
       setResult({
@@ -100,6 +105,11 @@ export default function VerificationDebug() {
         message: '所有密钥状态已重置为unknown'
       })
 
+      // 刷新统计数据
+      if (onStatsChange) {
+        onStatsChange()
+      }
+
     } catch (error) {
       setResult({
         success: false,
@@ -128,6 +138,11 @@ export default function VerificationDebug() {
 
       const key = keys[0]
       console.log('Testing key:', key)
+
+      // 检查是否有敏感数据
+      if (!key.leaked_keys_sensitive || !key.leaked_keys_sensitive.full_key) {
+        throw new Error('密钥没有完整的敏感数据')
+      }
 
       // 调用验证API
       const response = await fetch('/api/verify-key', {
@@ -163,6 +178,11 @@ export default function VerificationDebug() {
         apiResponse: apiResult,
         verified: apiResult.isValid ? 'valid' : 'invalid'
       })
+
+      // 刷新统计数据
+      if (onStatsChange) {
+        onStatsChange()
+      }
 
     } catch (error) {
       console.error('Single verification failed:', error)
