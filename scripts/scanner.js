@@ -186,6 +186,10 @@ class APIKeyScanner {
         // OpenAI系列
         `"sk-" language:python NOT is:fork`,
         `"sk-" language:javascript NOT is:fork`,
+        `"sk-proj-" language:python NOT is:fork`,   // OpenAI Project keys
+        `"sk-proj-" language:javascript NOT is:fork`,
+        `"sk-user-" language:python NOT is:fork`,   // OpenAI User keys
+        `"sk-user-" language:javascript NOT is:fork`,
         // 新增AI服务
         `"sk-or-v1-" language:python NOT is:fork`,  // OpenRouter
         `"pplx-" language:python NOT is:fork`,      // Perplexity
@@ -205,6 +209,8 @@ class APIKeyScanner {
         `groq_api_key language:python`,
         // 最近推送的仓库
         `"sk-" pushed:>${yesterday} NOT is:fork`,
+        `"sk-proj-" pushed:>${yesterday} NOT is:fork`,
+        `"sk-user-" pushed:>${yesterday} NOT is:fork`,
         `"AIza" pushed:>${yesterday} NOT is:fork`,
       ];
     } else {
@@ -213,6 +219,10 @@ class APIKeyScanner {
         // OpenAI系列
         `"sk-" language:python NOT is:fork`,
         `"sk-" language:javascript NOT is:fork`,
+        `"sk-proj-" language:python NOT is:fork`,   // OpenAI Project keys
+        `"sk-proj-" language:javascript NOT is:fork`,
+        `"sk-user-" language:python NOT is:fork`,   // OpenAI User keys
+        `"sk-user-" language:javascript NOT is:fork`,
         // 新增AI服务特征搜索
         `"sk-or-v1" NOT is:fork`,               // OpenRouter
         `"pplx-" NOT is:fork`,                  // Perplexity
@@ -238,10 +248,16 @@ class APIKeyScanner {
         // 文件扩展名搜索
         `sk- extension:py NOT is:fork`,
         `sk- extension:js NOT is:fork`,
+        `sk-proj- extension:py NOT is:fork`,
+        `sk-proj- extension:js NOT is:fork`,
+        `sk-user- extension:py NOT is:fork`,
+        `sk-user- extension:js NOT is:fork`,
         `AIza extension:py NOT is:fork`,
         `hf_ extension:py NOT is:fork`,
         // 配置文件搜索
         `"sk-" filename:.env`,
+        `"sk-proj-" filename:.env`,
+        `"sk-user-" filename:.env`,
         `"OPENAI_API_KEY" filename:.env`,
         `"ANTHROPIC_API_KEY" filename:.env`,
         `"GROQ_API_KEY" filename:.env`,
