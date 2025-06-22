@@ -2,8 +2,14 @@ const { Octokit } = require('@octokit/rest');
 const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
 
-// API密钥检测模式 - 扩展版
+// API密钥检测模式 - 修复版本，按优先级排序
 const KEY_PATTERNS = {
+  // 高特异性模式（优先检测）
+  anthropic: {
+    pattern: /sk-ant-api\d+-[a-zA-Z0-9_-]+/g,
+    name: 'Anthropic Claude',
+    confidence: 'high'
+  },
   openai: {
     pattern: /sk-[a-zA-Z0-9]{48}/g,
     name: 'OpenAI',
@@ -13,26 +19,6 @@ const KEY_PATTERNS = {
     pattern: /org-[a-zA-Z0-9]{24}/g,
     name: 'OpenAI Organization',
     confidence: 'high'
-  },
-  google: {
-    pattern: /AIza[0-9A-Za-z_-]{35}/g,
-    name: 'Google AI',
-    confidence: 'high'
-  },
-  google_service: {
-    pattern: /"private_key":\s*"[^"]*"/g,
-    name: 'Google Service Account',
-    confidence: 'medium'
-  },
-  anthropic: {
-    pattern: /sk-ant-[a-zA-Z0-9_-]{95}/g,
-    name: 'Anthropic Claude',
-    confidence: 'high'
-  },
-  cohere: {
-    pattern: /[a-zA-Z0-9]{8}-[a-zA-Z0-9]{4}-[a-zA-Z0-9]{4}-[a-zA-Z0-9]{4}-[a-zA-Z0-9]{12}/g,
-    name: 'Cohere',
-    confidence: 'medium'
   },
   huggingface: {
     pattern: /hf_[a-zA-Z0-9]{34}/g,
@@ -44,20 +30,10 @@ const KEY_PATTERNS = {
     name: 'Replicate',
     confidence: 'high'
   },
-  azure_openai: {
-    pattern: /[a-zA-Z0-9]{32}/g,
-    name: 'Azure OpenAI',
-    confidence: 'low'
-  },
-  mistral: {
-    pattern: /[a-zA-Z0-9]{32}/g,
-    name: 'Mistral AI',
-    confidence: 'low'
-  },
-  together: {
-    pattern: /[a-zA-Z0-9]{64}/g,
-    name: 'Together AI',
-    confidence: 'low'
+  google: {
+    pattern: /AIza[0-9A-Za-z_-]{35}/g,
+    name: 'Google AI',
+    confidence: 'high'
   },
   palm: {
     pattern: /AIza[0-9A-Za-z_-]{35}/g,
@@ -68,6 +44,34 @@ const KEY_PATTERNS = {
     pattern: /sk-[a-zA-Z0-9]{48}/g,
     name: 'Stability AI',
     confidence: 'medium'
+  },
+  google_service: {
+    pattern: /"private_key":\s*"[^"]*"/g,
+    name: 'Google Service Account',
+    confidence: 'medium'
+  },
+  cohere: {
+    pattern: /[a-zA-Z0-9]{8}-[a-zA-Z0-9]{4}-[a-zA-Z0-9]{4}-[a-zA-Z0-9]{4}-[a-zA-Z0-9]{12}/g,
+    name: 'Cohere',
+    confidence: 'medium'
+  },
+  together: {
+    pattern: /[a-zA-Z0-9]{64}/g,
+    name: 'Together AI',
+    confidence: 'low'
+  },
+  // 低特异性模式（最后检测，避免误匹配）
+  azure_openai: {
+    pattern: /[a-zA-Z0-9]{32}/g,
+    name: 'Azure OpenAI',
+    confidence: 'low',
+    context_required: ['azure', 'openai']
+  },
+  mistral: {
+    pattern: /[a-zA-Z0-9]{32}/g,
+    name: 'Mistral AI',
+    confidence: 'low',
+    context_required: ['mistral']
   }
 };
 
@@ -336,18 +340,15 @@ class APIKeyScanner {
     const contextEnd = Math.min(content.length, keyIndex + key.length + 200);
     const context = content.substring(contextStart, contextEnd).toLowerCase();
     
-    // 针对不同类型的密钥检查有效上下文
-    const validContexts = {
-      azure_openai: ['azure', 'openai', 'endpoint', 'deployment'],
-      mistral: ['mistral', 'api', 'token', 'auth'],
-      together: ['together', 'ai', 'api_key', 'token'],
-      stability: ['stability', 'stable', 'diffusion', 'image']
-    };
+    // 获取密钥配置中的上下文要求
+    const keyConfig = KEY_PATTERNS[type];
+    const requiredContexts = keyConfig?.context_required || [];
     
-    const requiredContexts = validContexts[type] || [];
+    // 如果没有上下文要求，直接通过
     if (requiredContexts.length === 0) return true;
     
-    return requiredContexts.some(ctx => context.includes(ctx));
+    // 检查是否包含必需的上下文关键词
+    return requiredContexts.some(ctx => context.includes(ctx.toLowerCase()));
   }
 
   maskKey(key) {
