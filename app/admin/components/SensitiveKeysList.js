@@ -2,17 +2,64 @@
 
 import { useState, useEffect } from 'react'
 import supabase from '../../../lib/supabase'
+import KeyStatistics from './KeyStatistics'
 
 export default function SensitiveKeysList({ user }) {
   const [keys, setKeys] = useState([])
+  const [filteredKeys, setFilteredKeys] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedKey, setSelectedKey] = useState(null)
   const [showFullKey, setShowFullKey] = useState(false)
   const [decryptedKey, setDecryptedKey] = useState('')
+  const [filters, setFilters] = useState({
+    keyType: 'all',
+    severity: 'all',
+    confidence: 'all',
+    status: 'all'
+  })
 
   useEffect(() => {
     fetchKeys()
   }, [])
+
+  useEffect(() => {
+    applyFilters()
+  }, [keys, filters])
+
+  const applyFilters = () => {
+    if (!keys || keys.length === 0) {
+      setFilteredKeys([])
+      return
+    }
+
+    let filtered = keys
+
+    // 按密钥类型筛选
+    if (filters.keyType !== 'all') {
+      filtered = filtered.filter(key => key.key_type === filters.keyType)
+    }
+
+    // 按严重程度筛选
+    if (filters.severity !== 'all') {
+      filtered = filtered.filter(key => key.severity === filters.severity)
+    }
+
+    // 按置信度筛选
+    if (filters.confidence !== 'all') {
+      filtered = filtered.filter(key => key.confidence === filters.confidence)
+    }
+
+    // 按验证状态筛选
+    if (filters.status !== 'all') {
+      filtered = filtered.filter(key => key.status === filters.status)
+    }
+
+    setFilteredKeys(filtered)
+  }
+
+  const handleFilterChange = (newFilters) => {
+    setFilters(newFilters)
+  }
 
   const fetchKeys = async () => {
     try {
@@ -129,9 +176,15 @@ export default function SensitiveKeysList({ user }) {
 
   return (
     <div className="space-y-6">
+      {/* 统计和筛选组件 */}
+      <KeyStatistics 
+        keys={keys} 
+        onFilterChange={handleFilterChange}
+      />
+
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-medium text-gray-900">
-          发现的API密钥 ({keys.length} 条记录)
+          发现的API密钥 ({filteredKeys.length} / {keys.length} 条记录)
         </h3>
         <button
           onClick={fetchKeys}
@@ -141,9 +194,18 @@ export default function SensitiveKeysList({ user }) {
         </button>
       </div>
 
-      {/* 密钥列表 - 直接显示格式 */}
+      {/* 密钥列表 - 显示筛选后的结果 */}
       <div className="space-y-4">
-        {keys.map((key) => (
+        {filteredKeys.length === 0 && keys.length > 0 ? (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
+            <div className="text-yellow-600 text-4xl mb-4">🔍</div>
+            <h3 className="text-lg font-medium text-yellow-800 mb-2">无匹配结果</h3>
+            <p className="text-yellow-700">
+              当前筛选条件没有找到匹配的密钥，请尝试调整筛选条件。
+            </p>
+          </div>
+        ) : (
+          filteredKeys.map((key) => (
           <div key={key.id} className="bg-white border rounded-lg p-6 shadow-sm">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* 基本信息 */}
@@ -270,7 +332,8 @@ export default function SensitiveKeysList({ user }) {
               </div>
             </div>
           </div>
-        ))}
+          ))
+        )}
       </div>
 
       {/* 完整密钥显示模态框 */}
