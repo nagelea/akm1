@@ -15,6 +15,7 @@ export default function SensitiveKeysList({ user, onStatsChange }) {
   const [manualExtractKey, setManualExtractKey] = useState(null)
   const [extractedKeys, setExtractedKeys] = useState('')
   const [extractLoading, setExtractLoading] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
   const [filters, setFilters] = useState({
     keyType: 'all',
     severity: 'all',
@@ -28,7 +29,7 @@ export default function SensitiveKeysList({ user, onStatsChange }) {
 
   useEffect(() => {
     applyFilters()
-  }, [keys, filters])
+  }, [keys, filters, searchQuery])
 
   const applyFilters = () => {
     if (!keys || keys.length === 0) {
@@ -56,6 +57,35 @@ export default function SensitiveKeysList({ user, onStatsChange }) {
     // 按验证状态筛选
     if (filters.status !== 'all') {
       filtered = filtered.filter(key => key.status === filters.status)
+    }
+
+    // 搜索功能
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim()
+      filtered = filtered.filter(key => {
+        // 搜索仓库名
+        const repoMatch = key.repo_name?.toLowerCase().includes(query)
+        
+        // 搜索文件路径
+        const fileMatch = key.file_path?.toLowerCase().includes(query)
+        
+        // 搜索密钥预览
+        const keyMatch = key.key_preview?.toLowerCase().includes(query)
+        
+        // 搜索上下文预览
+        const contextMatch = key.context_preview?.toLowerCase().includes(query)
+        
+        // 搜索完整上下文（如果有）
+        const fullContextMatch = key.leaked_keys_sensitive?.raw_context?.toLowerCase().includes(query)
+        
+        // 搜索编程语言
+        const languageMatch = key.repo_language?.toLowerCase().includes(query)
+        
+        // 搜索密钥类型名称
+        const typeMatch = key.key_type?.toLowerCase().includes(query)
+        
+        return repoMatch || fileMatch || keyMatch || contextMatch || fullContextMatch || languageMatch || typeMatch
+      })
     }
 
     setFilteredKeys(filtered)
@@ -336,6 +366,38 @@ export default function SensitiveKeysList({ user, onStatsChange }) {
         onFilterChange={handleFilterChange}
       />
 
+      {/* 搜索框 */}
+      <div className="bg-white border border-gray-200 rounded-lg p-4">
+        <div className="flex items-center space-x-4">
+          <div className="flex-1">
+            <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-2">
+              🔍 搜索密钥
+            </label>
+            <input
+              type="text"
+              id="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="搜索仓库名、文件路径、代码上下文、密钥内容..."
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="px-3 py-2 bg-gray-500 text-white text-sm rounded hover:bg-gray-600"
+            >
+              清除
+            </button>
+          )}
+        </div>
+        {searchQuery && (
+          <div className="mt-2 text-sm text-gray-600">
+            📋 搜索范围：仓库名称、文件路径、密钥内容、代码上下文、编程语言、密钥类型
+          </div>
+        )}
+      </div>
+
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-medium text-gray-900">
           发现的API密钥 ({filteredKeys.length} / {keys.length} 条记录)
@@ -355,8 +417,19 @@ export default function SensitiveKeysList({ user, onStatsChange }) {
             <div className="text-yellow-600 text-4xl mb-4">🔍</div>
             <h3 className="text-lg font-medium text-yellow-800 mb-2">无匹配结果</h3>
             <p className="text-yellow-700">
-              当前筛选条件没有找到匹配的密钥，请尝试调整筛选条件。
+              {searchQuery ? 
+                `没有找到包含 "${searchQuery}" 的密钥记录，请尝试其他搜索关键词。` :
+                '当前筛选条件没有找到匹配的密钥，请尝试调整筛选条件。'
+              }
             </p>
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="mt-3 px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700"
+              >
+                清除搜索条件
+              </button>
+            )}
           </div>
         ) : (
           filteredKeys.map((key) => (
