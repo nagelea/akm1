@@ -124,6 +124,67 @@ async function verifyGroq(key) {
   }
 }
 
+// 验证Azure OpenAI密钥
+async function verifyAzureOpenAI(key) {
+  try {
+    // Azure OpenAI 密钥通常以特定格式开头，但需要endpoint才能验证
+    // 尝试一些通用的验证方法，但不保证100%准确
+    
+    // 检查密钥格式（Azure OpenAI密钥通常是32位十六进制字符串）
+    if (!/^[a-f0-9]{32}$/i.test(key)) {
+      return false
+    }
+    
+    // 由于没有endpoint，先返回false，表示需要手动验证
+    // 后续可以改进为从数据库中获取endpoint信息
+    return false
+  } catch {
+    return false
+  }
+}
+
+// 验证Google Vertex AI密钥
+async function verifyVertexAI(key) {
+  try {
+    // Vertex AI 可以使用Google Cloud API密钥或服务账户
+    // 尝试使用Google AI API (新的Gemini API)
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`)
+    return response.ok
+  } catch {
+    return false
+  }
+}
+
+// 验证Cohere密钥
+async function verifyCohere(key) {
+  try {
+    const response = await fetch('https://api.cohere.ai/v1/models', {
+      headers: { 
+        'Authorization': `Bearer ${key}`,
+        'Content-Type': 'application/json'
+      }
+    })
+    return response.ok
+  } catch {
+    return false
+  }
+}
+
+// 验证Mistral密钥
+async function verifyMistral(key) {
+  try {
+    const response = await fetch('https://api.mistral.ai/v1/models', {
+      headers: { 
+        'Authorization': `Bearer ${key}`,
+        'Content-Type': 'application/json'
+      }
+    })
+    return response.ok
+  } catch {
+    return false
+  }
+}
+
 export async function POST(request) {
   try {
     const { keyType, key } = await request.json()
@@ -171,17 +232,26 @@ export async function POST(request) {
       case 'stability':
         isValid = await verifyOpenAI(key) // Stability API类似OpenAI
         break
+      case 'azure_openai':
+        // Azure OpenAI 需要特殊处理，因为需要endpoint
+        // 暂时尝试通用验证，实际使用时可能需要endpoint信息
+        isValid = await verifyAzureOpenAI(key)
+        break
+      case 'vertex_ai':
+        isValid = await verifyVertexAI(key)
+        break
+      case 'cohere':
+        isValid = await verifyCohere(key)
+        break
+      case 'mistral':
+        isValid = await verifyMistral(key)
+        break
       case 'fireworks':
       case 'anyscale':
       case 'voyage':
-      case 'together':
-      case 'cohere':
       case 'elevenlabs':
       case 'runpod':
-      case 'azure_openai':
-      case 'mistral':
-      case 'vertex_ai':
-        // 这些服务需要特殊验证方法，暂时标记为无法验证
+        // 这些服务暂时标记为无法验证
         return Response.json({ 
           isValid: false,
           message: '暂不支持该服务的自动验证',

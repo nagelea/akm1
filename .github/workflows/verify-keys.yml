@@ -170,6 +170,15 @@ jobs:
                 return await verifyPerplexity(fullKey);
               case 'groq':
                 return await verifyGroq(fullKey);
+              case 'azure_openai':
+                // Azure OpenAI 需要endpoint，暂时返回false
+                return await verifyAzureOpenAI(fullKey, null);
+              case 'vertex_ai':
+                return await verifyVertexAI(fullKey);
+              case 'cohere':
+                return await verifyCohere(fullKey);
+              case 'mistral':
+                return await verifyMistral(fullKey);
               default:
                 console.log(`⚠️  Unsupported key type: ${keyType}`);
                 return 'unsupported';
@@ -289,6 +298,73 @@ jobs:
           try {
             const response = await fetch('https://api.groq.com/openai/v1/models', {
               headers: { 'Authorization': `Bearer ${key}` }
+            });
+            return response.ok;
+          } catch {
+            return false;
+          }
+        }
+
+        // 验证Azure OpenAI密钥
+        async function verifyAzureOpenAI(key, endpoint) {
+          try {
+            // Azure OpenAI 需要 endpoint 和 api-key
+            // 如果没有endpoint，返回false
+            if (!endpoint) {
+              return false;
+            }
+            
+            const response = await fetch(`${endpoint}/openai/models?api-version=2023-12-01-preview`, {
+              headers: { 
+                'api-key': key,
+                'Content-Type': 'application/json'
+              }
+            });
+            return response.ok;
+          } catch {
+            return false;
+          }
+        }
+
+        // 验证Google Vertex AI密钥
+        async function verifyVertexAI(key) {
+          try {
+            // 尝试调用Google Cloud API
+            const response = await fetch('https://us-central1-aiplatform.googleapis.com/v1/projects/*/locations/us-central1/models', {
+              headers: { 
+                'Authorization': `Bearer ${key}`,
+                'Content-Type': 'application/json'
+              }
+            });
+            return response.ok;
+          } catch {
+            return false;
+          }
+        }
+
+        // 验证Cohere密钥
+        async function verifyCohere(key) {
+          try {
+            const response = await fetch('https://api.cohere.ai/v1/models', {
+              headers: { 
+                'Authorization': `Bearer ${key}`,
+                'Content-Type': 'application/json'
+              }
+            });
+            return response.ok;
+          } catch {
+            return false;
+          }
+        }
+
+        // 验证Mistral密钥
+        async function verifyMistral(key) {
+          try {
+            const response = await fetch('https://api.mistral.ai/v1/models', {
+              headers: { 
+                'Authorization': `Bearer ${key}`,
+                'Content-Type': 'application/json'
+              }
             });
             return response.ok;
           } catch {
