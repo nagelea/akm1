@@ -124,21 +124,90 @@ async function verifyGroq(key) {
   }
 }
 
+// 从代码上下文提取Azure OpenAI endpoint
+function extractAzureEndpoint(context) {
+  if (!context) return null
+  
+  const endpointPatterns = [
+    // 直接的https URL
+    /https:\/\/[\w-]+\.openai\.azure\.com[^\s"'\)\];,}]*/gi,
+    // 环境变量格式
+    /AZURE_OPENAI_ENDPOINT["\s]*[:=]["\s]*["'`]?([^"'\s,}\]\)\n]+)/gi,
+    /OPENAI_API_BASE["\s]*[:=]["\s]*["'`]?([^"'\s,}\]\)\n]+)/gi,
+    // 属性赋值格式
+    /endpoint["\s]*[:=]["\s]*["'`]?([^"'\s,}\]\)\n]*\.openai\.azure\.com[^"'\s,}\]\)\n]*)/gi,
+    /base_url["\s]*[:=]["\s]*["'`]?([^"'\s,}\]\)\n]*\.openai\.azure\.com[^"'\s,}\]\)\n]*)/gi,
+    /api_base["\s]*[:=]["\s]*["'`]?([^"'\s,}\]\)\n]*\.openai\.azure\.com[^"'\s,}\]\)\n]*)/gi,
+    // 字符串形式
+    /"[^"]*\.openai\.azure\.com[^"]*"/gi,
+    /'[^']*\.openai\.azure\.com[^']*'/gi
+  ]
+  
+  for (const pattern of endpointPatterns) {
+    const matches = [...context.matchAll(pattern)]
+    if (matches.length > 0) {
+      for (const match of matches) {
+        let endpoint = match[1] || match[0]
+        // 清理引号和空格
+        endpoint = endpoint.replace(/^["'`\s]|["'`\s]$/g, '')
+        
+        // 验证是否为有效的Azure OpenAI endpoint
+        if (endpoint.includes('.openai.azure.com') && endpoint.startsWith('https://')) {
+          return endpoint.replace(/\/$/, '') // 移除末尾斜杠
+        }
+      }
+    }
+  }
+  
+  return null
+}
+
 // 验证Azure OpenAI密钥
-async function verifyAzureOpenAI(key) {
+async function verifyAzureOpenAI(key, context = null) {
   try {
-    // Azure OpenAI 密钥通常以特定格式开头，但需要endpoint才能验证
-    // 尝试一些通用的验证方法，但不保证100%准确
-    
-    // 检查密钥格式（Azure OpenAI密钥通常是32位十六进制字符串）
-    if (!/^[a-f0-9]{32}$/i.test(key)) {
+    // 检查密钥格式（Azure OpenAI密钥通常是32位字符串）
+    if (!key || key.length < 16) {
       return false
     }
     
-    // 由于没有endpoint，先返回false，表示需要手动验证
-    // 后续可以改进为从数据库中获取endpoint信息
+    // 尝试从上下文提取endpoint
+    const endpoint = extractAzureEndpoint(context)
+    
+    if (!endpoint) {
+      console.log('Azure OpenAI: No endpoint found in context, skipping verification')
+      return false
+    }
+    
+    console.log(`Azure OpenAI: Trying endpoint ${endpoint}`)
+    
+    // 尝试调用models API
+    const modelsUrl = `${endpoint}/openai/models?api-version=2023-12-01-preview`
+    const response = await fetch(modelsUrl, {
+      headers: { 
+        'api-key': key,
+        'Content-Type': 'application/json'
+      },
+      timeout: 10000
+    })
+    
+    // Azure OpenAI 成功的响应码
+    if (response.ok) {
+      console.log('Azure OpenAI: Verification successful')
+      return true
+    }
+    
+    // 如果是401或403，说明密钥无效
+    if (response.status === 401 || response.status === 403) {
+      console.log('Azure OpenAI: Invalid key (401/403)')
+      return false
+    }
+    
+    // 其他错误可能是网络或配置问题，返回false但不确定
+    console.log(`Azure OpenAI: Unexpected response ${response.status}`)
     return false
-  } catch {
+    
+  } catch (error) {
+    console.log('Azure OpenAI: Verification error:', error.message)
     return false
   }
 }
@@ -187,13 +256,31 @@ async function verifyMistral(key) {
 
 export async function POST(request) {
   try {
-    const { keyType, key } = await request.json()
+    const { keyType, key, keyId } = await request.json()
 
     if (!key || !keyType) {
       return Response.json({ error: '缺少必要参数' }, { status: 400 })
     }
 
     let isValid = false
+    let context = null
+    
+    // 如果提供了keyId，尝试获取上下文信息（仅限Azure OpenAI）
+    if (keyId && keyType.toLowerCase() === 'azure_openai') {
+      try {
+        const { data: keyData } = await supabase
+          .from('leaked_keys')
+          .select('leaked_keys_sensitive(raw_context)')
+          .eq('id', keyId)
+          .single()
+        
+        if (keyData?.leaked_keys_sensitive?.raw_context) {
+          context = keyData.leaked_keys_sensitive.raw_context
+        }
+      } catch (error) {
+        console.log('Failed to fetch context for Azure OpenAI:', error.message)
+      }
+    }
 
     // 根据密钥类型选择验证方法
     switch (keyType.toLowerCase()) {
@@ -233,9 +320,8 @@ export async function POST(request) {
         isValid = await verifyOpenAI(key) // Stability API类似OpenAI
         break
       case 'azure_openai':
-        // Azure OpenAI 需要特殊处理，因为需要endpoint
-        // 暂时尝试通用验证，实际使用时可能需要endpoint信息
-        isValid = await verifyAzureOpenAI(key)
+        // Azure OpenAI 使用上下文提取endpoint
+        isValid = await verifyAzureOpenAI(key, context)
         break
       case 'vertex_ai':
         isValid = await verifyVertexAI(key)

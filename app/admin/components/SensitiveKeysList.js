@@ -134,7 +134,7 @@ export default function SensitiveKeysList({ user, onStatsChange }) {
       const response = await fetch('/api/verify-key', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ keyType, key: fullKey })
+        body: JSON.stringify({ keyType, key: fullKey, keyId })
       })
 
       const { isValid } = await response.json()

@@ -171,8 +171,9 @@ jobs:
               case 'groq':
                 return await verifyGroq(fullKey);
               case 'azure_openai':
-                // Azure OpenAI 需要endpoint，暂时返回false
-                return await verifyAzureOpenAI(fullKey, null);
+                // Azure OpenAI 使用上下文提取endpoint
+                const context = key.leaked_keys_sensitive?.[0]?.raw_context;
+                return await verifyAzureOpenAI(fullKey, context);
               case 'vertex_ai':
                 return await verifyVertexAI(fullKey);
               case 'cohere':
@@ -305,23 +306,89 @@ jobs:
           }
         }
 
+        // 从代码上下文提取Azure OpenAI endpoint
+        function extractAzureEndpoint(context) {
+          if (!context) return null;
+          
+          const endpointPatterns = [
+            // 直接的https URL
+            /https:\/\/[\w-]+\.openai\.azure\.com[^\s"'\)\];,}]*/gi,
+            // 环境变量格式
+            /AZURE_OPENAI_ENDPOINT["\s]*[:=]["\s]*["'`]?([^"'\s,}\]\)\n]+)/gi,
+            /OPENAI_API_BASE["\s]*[:=]["\s]*["'`]?([^"'\s,}\]\)\n]+)/gi,
+            // 属性赋值格式
+            /endpoint["\s]*[:=]["\s]*["'`]?([^"'\s,}\]\)\n]*\.openai\.azure\.com[^"'\s,}\]\)\n]*)/gi,
+            /base_url["\s]*[:=]["\s]*["'`]?([^"'\s,}\]\)\n]*\.openai\.azure\.com[^"'\s,}\]\)\n]*)/gi,
+            /api_base["\s]*[:=]["\s]*["'`]?([^"'\s,}\]\)\n]*\.openai\.azure\.com[^"'\s,}\]\)\n]*)/gi,
+            // 字符串形式
+            /"[^"]*\.openai\.azure\.com[^"]*"/gi,
+            /'[^']*\.openai\.azure\.com[^']*'/gi
+          ];
+          
+          for (const pattern of endpointPatterns) {
+            const matches = [...context.matchAll(pattern)];
+            if (matches.length > 0) {
+              for (const match of matches) {
+                let endpoint = match[1] || match[0];
+                // 清理引号和空格
+                endpoint = endpoint.replace(/^["'`\s]|["'`\s]$/g, '');
+                
+                // 验证是否为有效的Azure OpenAI endpoint
+                if (endpoint.includes('.openai.azure.com') && endpoint.startsWith('https://')) {
+                  return endpoint.replace(/\/$/, ''); // 移除末尾斜杠
+                }
+              }
+            }
+          }
+          
+          return null;
+        }
+
         // 验证Azure OpenAI密钥
-        async function verifyAzureOpenAI(key, endpoint) {
+        async function verifyAzureOpenAI(key, context) {
           try {
-            // Azure OpenAI 需要 endpoint 和 api-key
-            // 如果没有endpoint，返回false
-            if (!endpoint) {
+            // 检查密钥格式
+            if (!key || key.length < 16) {
               return false;
             }
             
-            const response = await fetch(`${endpoint}/openai/models?api-version=2023-12-01-preview`, {
+            // 尝试从上下文提取endpoint
+            const endpoint = extractAzureEndpoint(context);
+            
+            if (!endpoint) {
+              console.log('Azure OpenAI: No endpoint found in context, skipping verification');
+              return false;
+            }
+            
+            console.log(`Azure OpenAI: Trying endpoint ${endpoint}`);
+            
+            // 尝试调用models API
+            const modelsUrl = `${endpoint}/openai/models?api-version=2023-12-01-preview`;
+            const response = await fetch(modelsUrl, {
               headers: { 
                 'api-key': key,
                 'Content-Type': 'application/json'
               }
             });
-            return response.ok;
-          } catch {
+            
+            // Azure OpenAI 成功的响应码
+            if (response.ok) {
+              console.log('Azure OpenAI: Verification successful');
+              return true;
+            }
+            
+            // 如果是401或403，说明密钥无效
+            if (response.status === 401 || response.status === 403) {
+              console.log('Azure OpenAI: Invalid key (401/403)');
+              return false;
+            }
+            
+            // 其他错误可能是网络或配置问题
+            console.log(`Azure OpenAI: Unexpected response ${response.status}`);
+            return false;
+            
+          } catch (error) {
+            console.log('Azure OpenAI: Verification error:', error.message);
             return false;
           }
         }
