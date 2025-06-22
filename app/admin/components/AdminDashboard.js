@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import supabase from '../../../lib/supabase'
 import SensitiveKeysList from './SensitiveKeysList'
+import VerificationDebug from './VerificationDebug'
 
 export default function AdminDashboard({ user }) {
   const [activeTab, setActiveTab] = useState('keys')
@@ -60,6 +61,7 @@ export default function AdminDashboard({ user }) {
 
   const tabs = [
     { id: 'keys', name: '敏感密钥', icon: '🔑' },
+    { id: 'debug', name: '验证调试', icon: '🔧' },
     { id: 'logs', name: '访问日志', icon: '📋' },
     { id: 'users', name: '用户管理', icon: '👥', adminOnly: true },
   ]
@@ -161,6 +163,7 @@ export default function AdminDashboard({ user }) {
           {/* 选项卡内容 */}
           <div className="p-6">
             {activeTab === 'keys' && <SensitiveKeysList user={user} />}
+            {activeTab === 'debug' && <VerificationDebug />}
             {activeTab === 'logs' && <AccessLogsList user={user} />}
             {activeTab === 'users' && user.role === 'admin' && <UserManagement />}
           </div>
