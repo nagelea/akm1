@@ -89,12 +89,28 @@ export default function VerificationDebug({ onStatsChange }) {
     setResult(null)
 
     try {
+      // 先获取所有密钥ID，然后批量更新
+      const { data: allKeys, error: fetchError } = await supabase
+        .from('leaked_keys')
+        .select('id')
+      
+      if (fetchError) {
+        throw new Error('获取密钥列表失败: ' + fetchError.message)
+      }
+
+      if (!allKeys || allKeys.length === 0) {
+        throw new Error('没有找到任何密钥')
+      }
+
+      // 使用IN子句批量更新
+      const keyIds = allKeys.map(k => k.id)
       const { error } = await supabase
         .from('leaked_keys')
         .update({ 
           status: 'unknown',
           last_verified: null
         })
+        .in('id', keyIds)
 
       if (error) {
         throw new Error('重置状态失败: ' + error.message)
@@ -129,20 +145,27 @@ export default function VerificationDebug({ onStatsChange }) {
       const { data: keys, error: fetchError } = await supabase
         .from('leaked_keys')
         .select('id, key_type, leaked_keys_sensitive(*)')
-        .not('leaked_keys_sensitive', 'is', null)
-        .limit(1)
+        .limit(10) // 获取更多记录以便查找有敏感数据的
 
       if (fetchError || !keys || keys.length === 0) {
         throw new Error('没有找到可测试的密钥')
       }
 
-      const key = keys[0]
-      console.log('Testing key:', key)
+      // 查找第一个有完整敏感数据的密钥
+      const keyWithSensitive = keys.find(k => 
+        k.leaked_keys_sensitive && 
+        k.leaked_keys_sensitive.length > 0 && 
+        k.leaked_keys_sensitive[0].full_key
+      )
 
-      // 检查是否有敏感数据
-      if (!key.leaked_keys_sensitive || !key.leaked_keys_sensitive.full_key) {
-        throw new Error('密钥没有完整的敏感数据')
+      if (!keyWithSensitive) {
+        throw new Error(`在${keys.length}个密钥中没有找到完整的敏感数据。请检查数据库是否正确存储了敏感信息。`)
       }
+
+      const key = keyWithSensitive
+      const sensitiveData = key.leaked_keys_sensitive[0]
+      console.log('Testing key:', key)
+      console.log('Sensitive data available:', !!sensitiveData.full_key)
 
       // 调用验证API
       const response = await fetch('/api/verify-key', {
@@ -150,7 +173,7 @@ export default function VerificationDebug({ onStatsChange }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           keyType: key.key_type, 
-          key: key.leaked_keys_sensitive.full_key 
+          key: sensitiveData.full_key 
         })
       })
 

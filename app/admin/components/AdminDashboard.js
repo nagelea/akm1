@@ -15,6 +15,7 @@ export default function AdminDashboard({ user }) {
 
   const fetchStats = async () => {
     try {
+      console.log('Refreshing stats...')
       const { data } = await supabase
         .from('leaked_keys')
         .select('id, severity, confidence, status, created_at')
@@ -27,6 +28,7 @@ export default function AdminDashboard({ user }) {
           high_severity: data.filter(k => k.severity === 'high').length,
           verified: data.filter(k => k.status === 'valid').length
         }
+        console.log('New stats:', stats)
         setStats(stats)
       }
     } catch (error) {
