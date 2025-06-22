@@ -288,6 +288,7 @@ export async function POST(request) {
       case 'openai_org':
       case 'openai_project':
       case 'openai_user':
+      case 'openai_service':
       case 'deepseek':
         isValid = await verifyOpenAI(key)
         break

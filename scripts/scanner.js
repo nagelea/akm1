@@ -25,6 +25,11 @@ const KEY_PATTERNS = {
     name: 'OpenAI User',
     confidence: 'high'
   },
+  openai_service: {
+    pattern: /sk-svcacct-[a-zA-Z0-9_-]{64,}/g,
+    name: 'OpenAI Service Account',
+    confidence: 'high'
+  },
   openai_org: {
     pattern: /org-[a-zA-Z0-9]{24}/g,
     name: 'OpenAI Organization',
@@ -190,6 +195,8 @@ class APIKeyScanner {
         `"sk-proj-" language:javascript NOT is:fork`,
         `"sk-user-" language:python NOT is:fork`,   // OpenAI User keys
         `"sk-user-" language:javascript NOT is:fork`,
+        `"sk-svcacct-" language:python NOT is:fork`, // OpenAI Service Account keys
+        `"sk-svcacct-" language:javascript NOT is:fork`,
         // 新增AI服务
         `"sk-or-v1-" language:python NOT is:fork`,  // OpenRouter
         `"pplx-" language:python NOT is:fork`,      // Perplexity
@@ -211,6 +218,7 @@ class APIKeyScanner {
         `"sk-" pushed:>${yesterday} NOT is:fork`,
         `"sk-proj-" pushed:>${yesterday} NOT is:fork`,
         `"sk-user-" pushed:>${yesterday} NOT is:fork`,
+        `"sk-svcacct-" pushed:>${yesterday} NOT is:fork`,
         `"AIza" pushed:>${yesterday} NOT is:fork`,
       ];
     } else {
@@ -223,6 +231,8 @@ class APIKeyScanner {
         `"sk-proj-" language:javascript NOT is:fork`,
         `"sk-user-" language:python NOT is:fork`,   // OpenAI User keys
         `"sk-user-" language:javascript NOT is:fork`,
+        `"sk-svcacct-" language:python NOT is:fork`, // OpenAI Service Account keys
+        `"sk-svcacct-" language:javascript NOT is:fork`,
         // 新增AI服务特征搜索
         `"sk-or-v1" NOT is:fork`,               // OpenRouter
         `"pplx-" NOT is:fork`,                  // Perplexity
@@ -252,12 +262,15 @@ class APIKeyScanner {
         `sk-proj- extension:js NOT is:fork`,
         `sk-user- extension:py NOT is:fork`,
         `sk-user- extension:js NOT is:fork`,
+        `sk-svcacct- extension:py NOT is:fork`,
+        `sk-svcacct- extension:js NOT is:fork`,
         `AIza extension:py NOT is:fork`,
         `hf_ extension:py NOT is:fork`,
         // 配置文件搜索
         `"sk-" filename:.env`,
         `"sk-proj-" filename:.env`,
         `"sk-user-" filename:.env`,
+        `"sk-svcacct-" filename:.env`,
         `"OPENAI_API_KEY" filename:.env`,
         `"ANTHROPIC_API_KEY" filename:.env`,
         `"GROQ_API_KEY" filename:.env`,
