@@ -160,7 +160,10 @@ export async function POST(request) {
     }
     
     let processedCount = 0
+    let updatedCount = 0
+    let createdCount = 0
     const errors = []
+    const results = []
     
     for (const keyInfo of extractedKeys) {
       try {
@@ -169,15 +172,58 @@ export async function POST(request) {
         // 检查密钥是否已存在
         const { data: existingKey } = await supabase
           .from('leaked_keys')
-          .select('id')
+          .select('id, key_hash, key_type, confidence')
           .eq('key_hash', keyHash)
           .single()
         
         if (existingKey) {
-          continue // 跳过已存在的密钥
+          // 检查是否为同一个原始记录的密钥
+          if (existingKey.id === keyId) {
+            // 是同一个记录，更新信息
+            const { error: updateError } = await supabase
+              .from('leaked_keys')
+              .update({
+                key_type: keyInfo.type,
+                confidence: keyInfo.confidence,
+                status: 'unknown', // 重置验证状态
+                last_verified: null,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', keyId)
+            
+            if (updateError) {
+              errors.push(`更新密钥失败: ${updateError.message}`)
+            } else {
+              // 更新敏感数据
+              await supabase
+                .from('leaked_keys_sensitive')
+                .update({
+                  full_key: keyInfo.key,
+                  raw_context: rawContext
+                })
+                .eq('key_id', keyId)
+              
+              updatedCount++
+              results.push({
+                action: 'updated',
+                key: maskKey(keyInfo.key),
+                type: keyInfo.name,
+                id: keyId
+              })
+            }
+          } else {
+            // 是不同的记录但相同的密钥，跳过
+            results.push({
+              action: 'skipped',
+              key: maskKey(keyInfo.key),
+              type: keyInfo.name,
+              reason: '密钥已存在于其他记录中'
+            })
+          }
+          continue
         }
         
-        // 创建新的密钥记录
+        // 创建新的密钥记录（不同的密钥）
         const { data: newKey, error: insertError } = await supabase
           .from('leaked_keys')
           .insert({
@@ -219,19 +265,30 @@ export async function POST(request) {
           continue
         }
         
-        processedCount++
+        createdCount++
+        results.push({
+          action: 'created',
+          key: maskKey(keyInfo.key),
+          type: keyInfo.name,
+          id: newKey.id
+        })
         
       } catch (error) {
         errors.push(`处理密钥失败: ${error.message}`)
       }
     }
     
+    processedCount = updatedCount + createdCount
+    
     return Response.json({
       success: true,
       extractedCount: processedCount,
+      updatedCount: updatedCount,
+      createdCount: createdCount,
       totalFound: extractedKeys.length,
+      results: results,
       errors: errors.length > 0 ? errors : undefined,
-      message: `成功重新提取 ${processedCount} 个新密钥`
+      message: `处理完成: 更新 ${updatedCount} 个，新建 ${createdCount} 个密钥`
     })
     
   } catch (error) {

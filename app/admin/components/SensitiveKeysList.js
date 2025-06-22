@@ -205,7 +205,10 @@ export default function SensitiveKeysList({ user, onStatsChange }) {
       const result = await response.json()
 
       if (result.success) {
-        alert(`重新提取成功！发现 ${result.extractedCount} 个密钥`)
+        const message = result.updatedCount !== undefined && result.createdCount !== undefined
+          ? `重新提取成功！更新 ${result.updatedCount} 个，新建 ${result.createdCount} 个密钥`
+          : `重新提取成功！发现 ${result.extractedCount} 个密钥`
+        alert(message)
         fetchKeys() // 刷新列表
       } else {
         alert(`重新提取失败: ${result.error}`)
@@ -255,7 +258,10 @@ export default function SensitiveKeysList({ user, onStatsChange }) {
       const result = await response.json()
 
       if (result.success) {
-        alert(`手工提取成功！处理了 ${result.processedCount} 个密钥`)
+        const message = result.updatedCount !== undefined && result.createdCount !== undefined
+          ? `手工提取成功！更新 ${result.updatedCount} 个，新建 ${result.createdCount} 个密钥`
+          : `手工提取成功！处理了 ${result.processedCount} 个密钥`
+        alert(message)
         setShowManualExtractModal(false)
         fetchKeys() // 刷新列表
       } else {

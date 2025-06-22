@@ -156,6 +156,8 @@ export async function POST(request) {
     }
     
     let processedCount = 0
+    let updatedCount = 0
+    let createdCount = 0
     const results = []
     const errors = []
     
@@ -168,16 +170,65 @@ export async function POST(request) {
         // 检查密钥是否已存在
         const { data: existingKey } = await supabase
           .from('leaked_keys')
-          .select('id')
+          .select('id, key_hash, key_type, confidence')
           .eq('key_hash', keyHash)
           .single()
         
         if (existingKey) {
-          results.push({
-            key: maskKey(key),
-            status: 'duplicate',
-            message: '密钥已存在'
-          })
+          // 检查是否为同一个原始记录的密钥
+          if (existingKey.id === keyId) {
+            // 是同一个记录，更新信息
+            const severity = assessSeverity(keyInfo.type, keyInfo.confidence)
+            
+            const { error: updateError } = await supabase
+              .from('leaked_keys')
+              .update({
+                key_type: keyInfo.type,
+                key_preview: maskKey(key),
+                confidence: keyInfo.confidence,
+                severity: severity,
+                status: 'unknown', // 重置验证状态
+                last_verified: null,
+                context_preview: originalContext ? originalContext.substring(0, 200) + '...' : 'Manual extraction (updated)',
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', keyId)
+            
+            if (updateError) {
+              errors.push(`更新密钥 ${maskKey(key)} 失败: ${updateError.message}`)
+              results.push({
+                key: maskKey(key),
+                status: 'error',
+                message: updateError.message
+              })
+            } else {
+              // 更新敏感数据
+              await supabase
+                .from('leaked_keys_sensitive')
+                .update({
+                  full_key: key,
+                  raw_context: originalContext || 'Manual extraction (updated)'
+                })
+                .eq('key_id', keyId)
+              
+              updatedCount++
+              results.push({
+                key: maskKey(key),
+                type: keyInfo.name,
+                confidence: keyInfo.confidence,
+                severity: severity,
+                status: 'updated',
+                id: keyId
+              })
+            }
+          } else {
+            // 是不同的记录但相同的密钥，跳过
+            results.push({
+              key: maskKey(key),
+              status: 'duplicate',
+              message: '密钥已存在于其他记录中'
+            })
+          }
           continue
         }
         
@@ -236,13 +287,13 @@ export async function POST(request) {
           continue
         }
         
-        processedCount++
+        createdCount++
         results.push({
           key: maskKey(key),
           type: keyInfo.name,
           confidence: keyInfo.confidence,
           severity: severity,
-          status: 'success',
+          status: 'created',
           id: newKey.id
         })
         
@@ -256,13 +307,17 @@ export async function POST(request) {
       }
     }
     
+    processedCount = updatedCount + createdCount
+    
     return Response.json({
       success: true,
       processedCount,
+      updatedCount: updatedCount,
+      createdCount: createdCount,
       totalSubmitted: keyLines.length,
       results,
       errors: errors.length > 0 ? errors : undefined,
-      message: `成功处理 ${processedCount}/${keyLines.length} 个密钥`
+      message: `处理完成: 更新 ${updatedCount} 个，新建 ${createdCount} 个密钥`
     })
     
   } catch (error) {
