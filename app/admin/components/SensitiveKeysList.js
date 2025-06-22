@@ -11,6 +11,10 @@ export default function SensitiveKeysList({ user, onStatsChange }) {
   const [selectedKey, setSelectedKey] = useState(null)
   const [showFullKey, setShowFullKey] = useState(false)
   const [decryptedKey, setDecryptedKey] = useState('')
+  const [showManualExtractModal, setShowManualExtractModal] = useState(false)
+  const [manualExtractKey, setManualExtractKey] = useState(null)
+  const [extractedKeys, setExtractedKeys] = useState('')
+  const [extractLoading, setExtractLoading] = useState(false)
   const [filters, setFilters] = useState({
     keyType: 'all',
     severity: 'all',
@@ -179,6 +183,92 @@ export default function SensitiveKeysList({ user, onStatsChange }) {
     }
   }
 
+  const reextractKey = async (keyId) => {
+    try {
+      setExtractLoading(true)
+      
+      // 记录访问日志
+      await supabase.from('access_logs').insert({
+        action: 'reextract_key',
+        key_id: keyId,
+        ip_address: await getClientIP(),
+        user_agent: navigator.userAgent
+      })
+
+      // 调用重新提取API
+      const response = await fetch('/api/reextract-key', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keyId })
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        alert(`重新提取成功！发现 ${result.extractedCount} 个密钥`)
+        fetchKeys() // 刷新列表
+      } else {
+        alert(`重新提取失败: ${result.error}`)
+      }
+    } catch (error) {
+      console.error('Reextract failed:', error)
+      alert('重新提取失败')
+    } finally {
+      setExtractLoading(false)
+    }
+  }
+
+  const openManualExtractModal = (key) => {
+    setManualExtractKey(key)
+    setExtractedKeys('')
+    setShowManualExtractModal(true)
+  }
+
+  const handleManualExtract = async () => {
+    if (!extractedKeys.trim()) {
+      alert('请输入要提取的密钥')
+      return
+    }
+
+    try {
+      setExtractLoading(true)
+      
+      // 记录访问日志
+      await supabase.from('access_logs').insert({
+        action: 'manual_extract_key',
+        key_id: manualExtractKey.id,
+        ip_address: await getClientIP(),
+        user_agent: navigator.userAgent
+      })
+
+      // 调用手工提取API
+      const response = await fetch('/api/manual-extract-key', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          keyId: manualExtractKey.id,
+          extractedKeys: extractedKeys,
+          originalContext: manualExtractKey.leaked_keys_sensitive?.[0]?.raw_context
+        })
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        alert(`手工提取成功！处理了 ${result.processedCount} 个密钥`)
+        setShowManualExtractModal(false)
+        fetchKeys() // 刷新列表
+      } else {
+        alert(`手工提取失败: ${result.error}`)
+      }
+    } catch (error) {
+      console.error('Manual extract failed:', error)
+      alert('手工提取失败')
+    } finally {
+      setExtractLoading(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex justify-center py-8">
@@ -289,6 +379,20 @@ export default function SensitiveKeysList({ user, onStatsChange }) {
                       验证密钥有效性
                     </button>
                   )}
+                  
+                  <button
+                    onClick={() => reextractKey(key.id)}
+                    className="w-full px-3 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+                  >
+                    重新提取密钥
+                  </button>
+                  
+                  <button
+                    onClick={() => openManualExtractModal(key)}
+                    className="w-full px-3 py-2 bg-orange-600 text-white text-sm rounded hover:bg-orange-700"
+                  >
+                    手工提取密钥
+                  </button>
                 </div>
               </div>
 
@@ -382,6 +486,73 @@ export default function SensitiveKeysList({ user, onStatsChange }) {
                 className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
               >
                 关闭
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 手工提取密钥模态框 */}
+      {showManualExtractModal && manualExtractKey && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">
+              🔧️ 手工提取密钥 - {manualExtractKey.key_type.toUpperCase()}
+            </h3>
+            
+            {/* 原始上下文显示 */}
+            <div className="mb-6">
+              <h4 className="text-md font-medium text-gray-700 mb-2">📄 原始代码上下文:</h4>
+              <div className="bg-gray-50 border rounded p-4 max-h-40 overflow-y-auto">
+                <code className="text-xs font-mono text-gray-700 whitespace-pre-wrap">
+                  {manualExtractKey.leaked_keys_sensitive?.[0]?.raw_context || '无上下文信息'}
+                </code>
+              </div>
+            </div>
+            
+            {/* 手工输入区域 */}
+            <div className="mb-6">
+              <h4 className="text-md font-medium text-gray-700 mb-2">🔑 提取的密钥 (每行一个):</h4>
+              <textarea
+                value={extractedKeys}
+                onChange={(e) => setExtractedKeys(e.target.value)}
+                placeholder="请输入要提取的密钥，每行一个...\n\n例如:\nsk-proj-abc123...\nsk-svcacct-def456...\nAIza789..."
+                className="w-full h-40 p-3 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+              />
+            </div>
+            
+            {/* 提示信息 */}
+            <div className="bg-yellow-50 border border-yellow-200 rounded p-3 mb-4">
+              <p className="text-sm text-yellow-800">
+                💡 <strong>提示:</strong> 请从上面的代码上下文中手动提取密钥。支持多种格式：
+              </p>
+              <ul className="text-xs text-yellow-700 mt-2 list-disc list-inside">
+                <li>OpenAI: sk-, sk-proj-, sk-user-, sk-svcacct-</li>
+                <li>Anthropic: sk-ant-</li>
+                <li>Google: AIza</li>
+                <li>其他服务的API密钥</li>
+              </ul>
+            </div>
+            
+            {/* 操作按钮 */}
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setShowManualExtractModal(false)
+                  setManualExtractKey(null)
+                  setExtractedKeys('')
+                }}
+                className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+                disabled={extractLoading}
+              >
+                取消
+              </button>
+              <button
+                onClick={handleManualExtract}
+                className="px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700 disabled:opacity-50"
+                disabled={extractLoading || !extractedKeys.trim()}
+              >
+                {extractLoading ? '处理中...' : '提取密钥'}
               </button>
             </div>
           </div>
