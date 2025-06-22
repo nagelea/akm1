@@ -227,6 +227,51 @@ export default function SensitiveKeysList({ user, onStatsChange }) {
     setShowManualExtractModal(true)
   }
 
+  const deleteKey = async (keyId, keyPreview) => {
+    // 确认删除
+    if (!confirm(`确定要删除这个密钥吗？\n\n${keyPreview}\n\n此操作不可撤销！`)) {
+      return
+    }
+
+    try {
+      setExtractLoading(true)
+      
+      // 记录访问日志
+      await supabase.from('access_logs').insert({
+        action: 'delete_key_request',
+        key_id: keyId,
+        ip_address: await getClientIP(),
+        user_agent: navigator.userAgent
+      })
+
+      // 调用删除API
+      const response = await fetch('/api/delete-key', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ keyId })
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        alert('密钥删除成功！')
+        fetchKeys() // 刷新列表
+        
+        // 刷新统计数据
+        if (onStatsChange) {
+          onStatsChange()
+        }
+      } else {
+        alert(`删除失败: ${result.error}`)
+      }
+    } catch (error) {
+      console.error('Delete failed:', error)
+      alert('删除失败')
+    } finally {
+      setExtractLoading(false)
+    }
+  }
+
   const handleManualExtract = async () => {
     if (!extractedKeys.trim()) {
       alert('请输入要提取的密钥')
@@ -398,6 +443,14 @@ export default function SensitiveKeysList({ user, onStatsChange }) {
                     className="w-full px-3 py-2 bg-orange-600 text-white text-sm rounded hover:bg-orange-700"
                   >
                     手工提取密钥
+                  </button>
+                  
+                  <button
+                    onClick={() => deleteKey(key.id, key.key_preview)}
+                    className="w-full px-3 py-2 bg-red-600 text-white text-sm rounded hover:bg-red-700"
+                    disabled={extractLoading}
+                  >
+                    {extractLoading ? '删除中...' : '删除密钥'}
                   </button>
                 </div>
               </div>
