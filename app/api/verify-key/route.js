@@ -69,10 +69,22 @@ async function verifyReplicate(key) {
   }
 }
 
-// 添加新的验证函数
+// 验证OpenRouter密钥
 async function verifyOpenRouter(key) {
   try {
     const response = await fetch('https://openrouter.ai/api/v1/models', {
+      headers: { 'Authorization': `Bearer ${key}` }
+    })
+    return response.ok
+  } catch {
+    return false
+  }
+}
+
+// 验证Together AI密钥
+async function verifyTogether(key) {
+  try {
+    const response = await fetch('https://api.together.xyz/v1/models', {
       headers: { 'Authorization': `Bearer ${key}` }
     })
     return response.ok
@@ -140,6 +152,9 @@ export async function POST(request) {
         break
       case 'groq':
         isValid = await verifyGroq(key)
+        break
+      case 'together':
+        isValid = await verifyTogether(key)
         break
       case 'google':
       case 'google_service':

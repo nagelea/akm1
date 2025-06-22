@@ -105,13 +105,19 @@ jobs:
               console.log(`🔑 Verifying key ${i + 1}/${keys.length}: ID ${key.id} (${key.key_type})`);
               
               const sensitiveData = key.leaked_keys_sensitive[0];
-              const isValid = await verifyKey(key.key_type, sensitiveData.full_key);
+              const verificationResult = await verifyKey(key.key_type, sensitiveData.full_key);
+              
+              // 检查是否为不支持的密钥类型
+              if (verificationResult === 'unsupported') {
+                console.log(`⚠️  Key ${key.id} (${key.key_type}) - verification not supported, keeping as unknown`);
+                continue; // 跳过更新，保持 unknown 状态
+              }
               
               // 更新数据库状态
               const { error: updateError } = await supabase
                 .from('leaked_keys')
                 .update({
-                  status: isValid ? 'valid' : 'invalid',
+                  status: verificationResult ? 'valid' : 'invalid',
                   last_verified: new Date().toISOString()
                 })
                 .eq('id', key.id);
@@ -120,7 +126,7 @@ jobs:
                 console.error(`❌ Failed to update key ${key.id}:`, updateError);
                 failureCount++;
               } else {
-                console.log(`✅ Key ${key.id} verified as ${isValid ? 'valid' : 'invalid'}`);
+                console.log(`✅ Key ${key.id} verified as ${verificationResult ? 'valid' : 'invalid'}`);
                 successCount++;
               }
 
@@ -156,9 +162,17 @@ jobs:
                 return await verifyHuggingFace(fullKey);
               case 'replicate':
                 return await verifyReplicate(fullKey);
+              case 'together':
+                return await verifyTogether(fullKey);
+              case 'openrouter':
+                return await verifyOpenRouter(fullKey);
+              case 'perplexity':
+                return await verifyPerplexity(fullKey);
+              case 'groq':
+                return await verifyGroq(fullKey);
               default:
                 console.log(`⚠️  Unsupported key type: ${keyType}`);
-                return false;
+                return 'unsupported';
             }
           } catch (error) {
             console.error(`Verification error for ${keyType}:`, error);
@@ -222,6 +236,59 @@ jobs:
           try {
             const response = await fetch('https://api.replicate.com/v1/account', {
               headers: { 'Authorization': `Token ${key}` }
+            });
+            return response.ok;
+          } catch {
+            return false;
+          }
+        }
+
+        async function verifyTogether(key) {
+          try {
+            const response = await fetch('https://api.together.xyz/v1/models', {
+              headers: { 'Authorization': `Bearer ${key}` }
+            });
+            return response.ok;
+          } catch {
+            return false;
+          }
+        }
+
+        async function verifyOpenRouter(key) {
+          try {
+            const response = await fetch('https://openrouter.ai/api/v1/models', {
+              headers: { 'Authorization': `Bearer ${key}` }
+            });
+            return response.ok;
+          } catch {
+            return false;
+          }
+        }
+
+        async function verifyPerplexity(key) {
+          try {
+            const response = await fetch('https://api.perplexity.ai/chat/completions', {
+              method: 'POST',
+              headers: { 
+                'Authorization': `Bearer ${key}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                model: 'llama-3.1-sonar-small-128k-online',
+                messages: [{ role: 'user', content: 'test' }],
+                max_tokens: 1
+              })
+            });
+            return response.status !== 401 && response.status !== 403;
+          } catch {
+            return false;
+          }
+        }
+
+        async function verifyGroq(key) {
+          try {
+            const response = await fetch('https://api.groq.com/openai/v1/models', {
+              headers: { 'Authorization': `Bearer ${key}` }
             });
             return response.ok;
           } catch {

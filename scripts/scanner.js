@@ -467,6 +467,13 @@ class APIKeyScanner {
       if (!response.ok) {
         // 如果API endpoint不可用，使用本地验证逻辑
         const verificationResult = await this.localVerifyKey(keyType, fullKey);
+        
+        // 检查是否为不支持的密钥类型
+        if (verificationResult.isValid === 'unsupported') {
+          console.log(`⚠️ Auto-verification skipped for key ${keyId} (${keyType}) - not supported`);
+          return; // 不更新状态，保持 unknown
+        }
+        
         await this.updateKeyStatus(keyId, verificationResult.isValid);
         console.log(`✅ Auto-verification completed for key ${keyId}: ${verificationResult.isValid ? 'valid' : 'invalid'}`);
         return;
@@ -501,9 +508,17 @@ class APIKeyScanner {
           return await this.verifyHuggingFace(key);
         case 'replicate':
           return await this.verifyReplicate(key);
+        case 'together':
+          return await this.verifyTogether(key);
+        case 'openrouter':
+          return await this.verifyOpenRouter(key);
+        case 'perplexity':
+          return await this.verifyPerplexity(key);
+        case 'groq':
+          return await this.verifyGroq(key);
         default:
           // 不支持自动验证的服务
-          return { isValid: false, message: '暂不支持该服务的自动验证' };
+          return { isValid: 'unsupported', message: '暂不支持该服务的自动验证' };
       }
     } catch (error) {
       return { isValid: false, message: '验证过程中发生错误' };
@@ -566,6 +581,59 @@ class APIKeyScanner {
     try {
       const response = await fetch('https://api.replicate.com/v1/account', {
         headers: { 'Authorization': `Token ${key}` }
+      });
+      return { isValid: response.ok };
+    } catch {
+      return { isValid: false };
+    }
+  }
+
+  async verifyTogether(key) {
+    try {
+      const response = await fetch('https://api.together.xyz/v1/models', {
+        headers: { 'Authorization': `Bearer ${key}` }
+      });
+      return { isValid: response.ok };
+    } catch {
+      return { isValid: false };
+    }
+  }
+
+  async verifyOpenRouter(key) {
+    try {
+      const response = await fetch('https://openrouter.ai/api/v1/models', {
+        headers: { 'Authorization': `Bearer ${key}` }
+      });
+      return { isValid: response.ok };
+    } catch {
+      return { isValid: false };
+    }
+  }
+
+  async verifyPerplexity(key) {
+    try {
+      const response = await fetch('https://api.perplexity.ai/chat/completions', {
+        method: 'POST',
+        headers: { 
+          'Authorization': `Bearer ${key}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'llama-3.1-sonar-small-128k-online',
+          messages: [{ role: 'user', content: 'test' }],
+          max_tokens: 1
+        })
+      });
+      return { isValid: response.status !== 401 && response.status !== 403 };
+    } catch {
+      return { isValid: false };
+    }
+  }
+
+  async verifyGroq(key) {
+    try {
+      const response = await fetch('https://api.groq.com/openai/v1/models', {
+        headers: { 'Authorization': `Bearer ${key}` }
       });
       return { isValid: response.ok };
     } catch {
