@@ -13,7 +13,21 @@ export async function DELETE(request) {
       return Response.json({ error: '缺少keyId参数' }, { status: 400 })
     }
     
-    // 首先删除敏感数据记录
+    // 首先删除访问日志记录（外键约束）
+    const { error: logsError } = await supabase
+      .from('access_logs')
+      .delete()
+      .eq('key_id', keyId)
+    
+    if (logsError) {
+      console.error('Failed to delete access logs:', logsError)
+      return Response.json({ 
+        error: '删除访问日志失败', 
+        details: logsError.message 
+      }, { status: 500 })
+    }
+    
+    // 然后删除敏感数据记录
     const { error: sensitiveError } = await supabase
       .from('leaked_keys_sensitive')
       .delete()
@@ -27,7 +41,7 @@ export async function DELETE(request) {
       }, { status: 500 })
     }
     
-    // 然后删除主密钥记录
+    // 最后删除主密钥记录
     const { error: keyError } = await supabase
       .from('leaked_keys')
       .delete()
