@@ -21,13 +21,23 @@ export default function AdminDashboard({ user }) {
         .select('id, severity, confidence, status, created_at')
       
       if (data) {
+        console.log('Raw data for stats:', data.slice(0, 5)) // 显示前5条记录
+        
         const today = new Date().toDateString()
+        const validKeys = data.filter(k => k.status === 'valid')
         const stats = {
           total: data.length,
           today: data.filter(k => new Date(k.created_at).toDateString() === today).length,
           high_severity: data.filter(k => k.severity === 'high').length,
-          verified: data.filter(k => k.status === 'valid').length
+          verified: validKeys.length
         }
+        
+        console.log('Valid keys found:', validKeys)
+        console.log('Status distribution:', {
+          valid: data.filter(k => k.status === 'valid').length,
+          invalid: data.filter(k => k.status === 'invalid').length,
+          unknown: data.filter(k => k.status === 'unknown').length
+        })
         console.log('New stats:', stats)
         setStats(stats)
       }

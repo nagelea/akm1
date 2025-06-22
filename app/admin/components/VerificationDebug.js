@@ -7,6 +7,39 @@ export default function VerificationDebug({ onStatsChange }) {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState(null)
 
+  const checkDatabaseStatus = async () => {
+    setLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from('leaked_keys')
+        .select('id, status, last_verified')
+        .order('id', { ascending: false })
+        .limit(10)
+
+      if (error) throw error
+
+      const statusCounts = {
+        valid: data.filter(k => k.status === 'valid').length,
+        invalid: data.filter(k => k.status === 'invalid').length,
+        unknown: data.filter(k => k.status === 'unknown').length
+      }
+
+      setResult({
+        success: true,
+        message: '数据库状态检查完成',
+        statusCounts,
+        recentKeys: data
+      })
+    } catch (error) {
+      setResult({
+        success: false,
+        message: '数据库检查失败: ' + error.message
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const testBatchVerification = async () => {
     setLoading(true)
     setResult(null)
@@ -33,17 +66,23 @@ export default function VerificationDebug({ onStatsChange }) {
         const testStatus = ['valid', 'invalid', 'unknown'][i % 3]
         
         try {
-          const { error: updateError } = await supabase
+          console.log(`Updating key ${key.id} from ${key.status} to ${testStatus}`)
+          
+          const { data: updateData, error: updateError } = await supabase
             .from('leaked_keys')
             .update({ 
               status: testStatus,
               last_verified: new Date().toISOString()
             })
             .eq('id', key.id)
+            .select()
 
           if (updateError) {
+            console.error('Update error:', updateError)
             throw new Error('更新失败: ' + updateError.message)
           }
+
+          console.log('Update result:', updateData)
 
           results.push({
             id: key.id,
@@ -223,7 +262,7 @@ export default function VerificationDebug({ onStatsChange }) {
       <h3 className="text-lg font-medium text-gray-900 mb-4">🔧 验证状态调试</h3>
       
       <div className="space-y-4">
-        <div className="flex space-x-4">
+        <div className="grid grid-cols-2 gap-4">
           <button
             onClick={testBatchVerification}
             disabled={loading}
@@ -246,6 +285,14 @@ export default function VerificationDebug({ onStatsChange }) {
             className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
           >
             {loading ? '处理中...' : '重置所有状态'}
+          </button>
+
+          <button
+            onClick={checkDatabaseStatus}
+            disabled={loading}
+            className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
+          >
+            {loading ? '处理中...' : '检查数据库状态'}
           </button>
         </div>
 
@@ -277,6 +324,31 @@ export default function VerificationDebug({ onStatsChange }) {
                 </pre>
               </div>
             )}
+            {result.statusCounts && (
+              <div className="mt-3">
+                <h5 className="font-medium text-gray-700">状态统计:</h5>
+                <div className="text-sm mt-1">
+                  <span className="text-green-600">Valid: {result.statusCounts.valid}</span> | 
+                  <span className="text-red-600 ml-2">Invalid: {result.statusCounts.invalid}</span> | 
+                  <span className="text-gray-600 ml-2">Unknown: {result.statusCounts.unknown}</span>
+                </div>
+              </div>
+            )}
+            {result.recentKeys && (
+              <div className="mt-3">
+                <h5 className="font-medium text-gray-700">最近10条记录:</h5>
+                <div className="text-xs mt-1 space-y-1 max-h-32 overflow-y-auto">
+                  {result.recentKeys.map(key => (
+                    <div key={key.id} className="flex justify-between">
+                      <span>ID {key.id}</span>
+                      <span className={key.status === 'valid' ? 'text-green-600' : key.status === 'invalid' ? 'text-red-600' : 'text-gray-600'}>
+                        {key.status}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -286,6 +358,7 @@ export default function VerificationDebug({ onStatsChange }) {
             <li>批量测试: 将前5个密钥分别设置为valid/invalid/unknown状态</li>
             <li>单个验证: 测试真实的API验证流程</li>
             <li>重置状态: 将所有密钥状态重置为unknown</li>
+            <li>检查状态: 查看数据库中当前的状态分布和最近记录</li>
           </ul>
         </div>
       </div>
