@@ -10,6 +10,7 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [retryCount, setRetryCount] = useState(0)
+  const [initialCheckComplete, setInitialCheckComplete] = useState(false)
 
   // 重置错误状态的函数
   const resetError = () => {
@@ -69,6 +70,7 @@ export default function AdminPage() {
       setUser(null)
     } finally {
       setLoading(false)
+      setInitialCheckComplete(true)
     }
   }
 
@@ -88,34 +90,43 @@ export default function AdminPage() {
       async (event, session) => {
         console.log('Auth state changed:', event)
         
+        // 只有在初始检查完成后才处理状态变化
+        if (!initialCheckComplete) {
+          console.log('Ignoring auth state change - initial check not complete')
+          return
+        }
+        
         if (event === 'SIGNED_OUT') {
           setUser(null)
           setError(null)
         } else if (event === 'SIGNED_IN' && session?.user) {
-          setLoading(true)
-          setError(null)
-          
-          try {
-            const { data: adminUser, error: adminError } = await supabase
-              .from('admin_users')
-              .select('*')
-              .eq('email', session.user.email)
-              .single()
+          // 添加延迟以改善用户体验
+          setTimeout(async () => {
+            setLoading(true)
+            setError(null)
             
-            if (adminError) {
-              if (adminError.code === 'PGRST116') {
-                setError('该账户不是管理员账户')
-              } else {
-                setError('管理员验证失败: ' + adminError.message)
+            try {
+              const { data: adminUser, error: adminError } = await supabase
+                .from('admin_users')
+                .select('*')
+                .eq('email', session.user.email)
+                .single()
+              
+              if (adminError) {
+                if (adminError.code === 'PGRST116') {
+                  setError('该账户不是管理员账户')
+                } else {
+                  setError('管理员验证失败: ' + adminError.message)
+                }
+              } else if (adminUser) {
+                setUser({ ...session.user, role: adminUser.role })
               }
-            } else if (adminUser) {
-              setUser({ ...session.user, role: adminUser.role })
+            } catch (error) {
+              setError('验证过程发生错误: ' + error.message)
+            } finally {
+              setLoading(false)
             }
-          } catch (error) {
-            setError('验证过程发生错误: ' + error.message)
-          } finally {
-            setLoading(false)
-          }
+          }, 800) // 延迟800ms
         }
       }
     )
@@ -124,7 +135,7 @@ export default function AdminPage() {
       clearTimeout(timeout)
       subscription.unsubscribe()
     }
-  }, [retryCount]) // 依赖retryCount以便重试时重新执行
+  }, [retryCount, initialCheckComplete]) // 依赖retryCount和initialCheckComplete
 
   if (loading) {
     return (

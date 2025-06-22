@@ -9,11 +9,13 @@ export default function AdminLogin() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [success, setSuccess] = useState(false)
 
   const handleLogin = async (e) => {
     e.preventDefault()
     setLoading(true)
     setError('')
+    setSuccess(false)
 
     try {
       // 首先验证是否为管理员用户
@@ -37,6 +39,9 @@ export default function AdminLogin() {
         throw authError
       }
 
+      // 显示成功状态
+      setSuccess(true)
+
       // 记录登录日志
       await supabase.from('access_logs').insert({
         user_id: adminUser.id,
@@ -45,10 +50,18 @@ export default function AdminLogin() {
         user_agent: navigator.userAgent
       })
 
+      // 延迟一下让用户看到成功提示
+      setTimeout(() => {
+        console.log('Login successful, waiting for auth state change...')
+      }, 1000)
+
     } catch (error) {
       setError(error.message)
+      setSuccess(false)
     } finally {
-      setLoading(false)
+      setTimeout(() => {
+        setLoading(false)
+      }, success ? 1200 : 0) // 成功时延迟更长时间
     }
   }
 
@@ -113,20 +126,39 @@ export default function AdminLogin() {
             </div>
           )}
 
+          {success && (
+            <div className="rounded-md bg-green-50 p-4">
+              <div className="text-sm text-green-700">
+                ✅ 登录成功！正在跳转到管理后台...
+              </div>
+            </div>
+          )}
+
           <div>
             <button
               type="submit"
-              disabled={loading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+              disabled={loading || success}
+              className={`group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 ${
+                success 
+                  ? 'bg-green-600 hover:bg-green-700 focus:ring-green-500' 
+                  : 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500'
+              }`}
             >
-              {loading ? '登录中...' : '登录'}
+              {loading && !success && '登录中...'}
+              {success && '登录成功 ✅'}
+              {!loading && !success && '登录'}
             </button>
           </div>
 
           <div className="text-center">
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-gray-500 mb-2">
               仅限授权管理员访问敏感数据
             </p>
+            <div className="text-xs text-gray-400 bg-gray-50 rounded p-2">
+              <p className="font-medium">测试账户:</p>
+              <p>邮箱: admin@test.com</p>
+              <p>密码: temp123</p>
+            </div>
           </div>
         </form>
       </div>
