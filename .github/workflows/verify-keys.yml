@@ -105,7 +105,7 @@ jobs:
               console.log(`🔑 Verifying key ${i + 1}/${keys.length}: ID ${key.id} (${key.key_type})`);
               
               const sensitiveData = key.leaked_keys_sensitive[0];
-              const verificationResult = await verifyKey(key.key_type, sensitiveData.full_key);
+              const verificationResult = await verifyKey(key.key_type, sensitiveData.full_key, key);
               
               // 检查是否为不支持的密钥类型
               if (verificationResult === 'unsupported') {
@@ -144,7 +144,7 @@ jobs:
           console.log(`🎯 Verification completed: ${successCount} success, ${failureCount} failures`);
         }
 
-        async function verifyKey(keyType, fullKey) {
+        async function verifyKey(keyType, fullKey, keyObject = null) {
           try {
             switch (keyType.toLowerCase()) {
               case 'openai':
@@ -172,7 +172,7 @@ jobs:
                 return await verifyGroq(fullKey);
               case 'azure_openai':
                 // Azure OpenAI 使用上下文提取endpoint
-                const context = key.leaked_keys_sensitive?.[0]?.raw_context;
+                const context = keyObject?.leaked_keys_sensitive?.[0]?.raw_context;
                 return await verifyAzureOpenAI(fullKey, context);
               case 'vertex_ai':
                 return await verifyVertexAI(fullKey);
