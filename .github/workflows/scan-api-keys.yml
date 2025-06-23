@@ -50,6 +50,10 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
         SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        # Pagination Configuration
+        ENABLE_PAGINATION: true
+        MAX_PAGES: 3
+        PER_PAGE: 50
       run: |
         # 确定扫描类型
         if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
