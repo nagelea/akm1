@@ -11,7 +11,7 @@
       ],
       "regex_pattern": "(sk_live_|sk_test_|rk_live_|pk_live_|pk_test_)[a-zA-Z0-9]{24,}",
       "confidence": "high",
-      "enabled": true
+      "enabled": false
     },
     {
       "name": "SendGrid API Keys",
@@ -92,6 +92,7 @@
       "search_patterns": [
         "sk-or-",
         "openrouter",
+        "/sk-or-[a-zA-Z0-9-]{32,70}/",
         "OPENROUTER_API_KEY"
       ],
       "regex_pattern": "sk-or-[a-zA-Z0-9-]{32,70}",
