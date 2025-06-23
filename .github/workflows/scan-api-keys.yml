@@ -17,6 +17,7 @@ on:
         - recent
         - full
         - custom
+        - file_custom
       custom_pattern:
         description: 'Custom Search Pattern (when scan_type=custom)'
         required: false

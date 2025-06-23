@@ -1,6 +1,8 @@
 const { Octokit } = require('@octokit/rest');
 const { createClient } = require('@supabase/supabase-js');
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 
 // API密钥检测模式 - 扩展版本，按优先级排序
 const KEY_PATTERNS = {
@@ -167,6 +169,48 @@ const KEY_PATTERNS = {
   }
 };
 
+// 加载自定义模式配置
+function loadCustomPatterns() {
+  try {
+    const configPath = path.join(__dirname, '..', 'custom-patterns.json');
+    if (!fs.existsSync(configPath)) {
+      console.log('📄 No custom patterns file found, using defaults only');
+      return {};
+    }
+
+    const configContent = fs.readFileSync(configPath, 'utf8');
+    const config = JSON.parse(configContent);
+    const customPatterns = {};
+
+    if (config.custom_patterns) {
+      config.custom_patterns.forEach((pattern, index) => {
+        if (pattern.enabled) {
+          try {
+            const regexPattern = new RegExp(pattern.regex_pattern, 'g');
+            customPatterns[`custom_${index}`] = {
+              pattern: regexPattern,
+              name: pattern.name,
+              confidence: pattern.confidence || 'medium',
+              search_patterns: pattern.search_patterns || []
+            };
+            console.log(`✅ Loaded custom pattern: ${pattern.name}`);
+          } catch (error) {
+            console.error(`❌ Invalid regex in pattern "${pattern.name}": ${error.message}`);
+          }
+        } else {
+          console.log(`⏸️ Skipped disabled pattern: ${pattern.name}`);
+        }
+      });
+    }
+
+    console.log(`📋 Loaded ${Object.keys(customPatterns).length} custom patterns`);
+    return customPatterns;
+  } catch (error) {
+    console.error('❌ Failed to load custom patterns:', error.message);
+    return {};
+  }
+}
+
 class APIKeyScanner {
   constructor() {
     this.octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
@@ -177,6 +221,7 @@ class APIKeyScanner {
     this.scannedToday = 0;
     this.foundToday = 0;
     this.customPatterns = {}; // 存储动态添加的自定义模式
+    this.fileBasedPatterns = loadCustomPatterns(); // 加载文件定义的模式
   }
 
   addCustomPattern(searchPattern, serviceName) {
@@ -252,6 +297,28 @@ class APIKeyScanner {
       
       // 动态添加自定义正则模式到检测器
       this.addCustomPattern(customPattern, customService);
+      
+    } else if (scanType === 'file_custom') {
+      // 文件定义的自定义模式
+      console.log('📄 Executing FILE-BASED custom scan mode');
+      
+      if (Object.keys(this.fileBasedPatterns).length === 0) {
+        console.error('❌ No enabled custom patterns found in custom-patterns.json');
+        return;
+      }
+      
+      queries = [];
+      Object.values(this.fileBasedPatterns).forEach(pattern => {
+        pattern.search_patterns.forEach(searchPattern => {
+          queries.push(`"${searchPattern}" language:python NOT is:fork`);
+          queries.push(`"${searchPattern}" language:javascript NOT is:fork`);
+          queries.push(`"${searchPattern}" language:typescript NOT is:fork`);
+          queries.push(`"${searchPattern}" NOT is:fork`);
+        });
+      });
+      
+      console.log(`📋 Generated ${queries.length} file-based custom search queries`);
+      console.log('🚫 Skipping all predefined patterns - using ONLY file-defined patterns');
       
     } else if (scanType === 'recent') {
       // 最近活跃的仓库扫描 - 使用pushed而不是created
@@ -358,7 +425,7 @@ class APIKeyScanner {
       ];
     } else {
       console.error(`❌ Unknown scan type: ${scanType}`);
-      console.log('✅ Valid scan types: custom, recent, full');
+      console.log('✅ Valid scan types: custom, recent, full, file_custom');
       return;
     }
 
@@ -427,7 +494,7 @@ class APIKeyScanner {
       const fileContent = Buffer.from(content.data.content, 'base64').toString();
       
       // 检测各种API密钥
-      const allPatterns = { ...KEY_PATTERNS, ...this.customPatterns };
+      const allPatterns = { ...KEY_PATTERNS, ...this.customPatterns, ...this.fileBasedPatterns };
       for (const [type, config] of Object.entries(allPatterns)) {
         const matches = fileContent.match(config.pattern);
         if (matches) {
@@ -449,7 +516,7 @@ class APIKeyScanner {
 
   async processFoundKey(key, type, fileInfo, content) {
     // 获取密钥类型配置（包括自定义模式）
-    const keyConfig = KEY_PATTERNS[type] || this.customPatterns[type];
+    const keyConfig = KEY_PATTERNS[type] || this.customPatterns[type] || this.fileBasedPatterns[type];
     
     // 过滤明显的假密钥
     if (this.isLikelyFake(key, content)) {
@@ -562,7 +629,7 @@ class APIKeyScanner {
     const context = content.substring(contextStart, contextEnd).toLowerCase();
     
     // 获取密钥配置中的上下文要求（包括自定义模式）
-    const keyConfig = KEY_PATTERNS[type] || this.customPatterns[type];
+    const keyConfig = KEY_PATTERNS[type] || this.customPatterns[type] || this.fileBasedPatterns[type];
     const requiredContexts = keyConfig?.context_required || [];
     
     // 如果没有上下文要求，直接通过

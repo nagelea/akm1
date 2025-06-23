@@ -1,0 +1,102 @@
+{
+  "custom_patterns": [
+    {
+      "name": "Stripe API Keys",
+      "search_patterns": [
+        "sk_live_",
+        "sk_test_",
+        "rk_live_",
+        "pk_live_",
+        "pk_test_"
+      ],
+      "regex_pattern": "(sk_live_|sk_test_|rk_live_|pk_live_|pk_test_)[a-zA-Z0-9]{24,}",
+      "confidence": "high",
+      "enabled": true
+    },
+    {
+      "name": "SendGrid API Keys",
+      "search_patterns": [
+        "SG.",
+        "sendgrid"
+      ],
+      "regex_pattern": "SG\\.[a-zA-Z0-9_-]{60,}",
+      "confidence": "high",
+      "enabled": false
+    },
+    {
+      "name": "Slack Bot Tokens",
+      "search_patterns": [
+        "xoxb-",
+        "xoxp-",
+        "xoxa-"
+      ],
+      "regex_pattern": "xox[bpa]-[a-zA-Z0-9-]+",
+      "confidence": "high",
+      "enabled": false
+    },
+    {
+      "name": "GitHub Personal Access Tokens",
+      "search_patterns": [
+        "ghp_",
+        "gho_",
+        "ghu_",
+        "ghs_",
+        "ghr_"
+      ],
+      "regex_pattern": "gh[ospru]_[a-zA-Z0-9]{36}",
+      "confidence": "high",
+      "enabled": false
+    },
+    {
+      "name": "JWT Tokens",
+      "search_patterns": [
+        "eyJ",
+        "jwt"
+      ],
+      "regex_pattern": "eyJ[A-Za-z0-9+/]{10,}\\.[A-Za-z0-9+/]{10,}\\.[A-Za-z0-9+/]{10,}",
+      "confidence": "medium",
+      "enabled": false
+    },
+    {
+      "name": "Discord Bot Tokens",
+      "search_patterns": [
+        "discord",
+        "bot_token"
+      ],
+      "regex_pattern": "[A-Za-z0-9]{24}\\.[A-Za-z0-9]{6}\\.[A-Za-z0-9_-]{27}",
+      "confidence": "medium",
+      "enabled": false
+    },
+    {
+      "name": "Twilio API Keys",
+      "search_patterns": [
+        "SK",
+        "twilio"
+      ],
+      "regex_pattern": "SK[a-f0-9]{32}",
+      "confidence": "medium",
+      "enabled": false
+    },
+    {
+      "name": "AWS Access Keys",
+      "search_patterns": [
+        "AKIA",
+        "aws_access_key_id"
+      ],
+      "regex_pattern": "AKIA[0-9A-Z]{16}",
+      "confidence": "high",
+      "enabled": false
+    },
+    {
+      "name": "Custom API Keys",
+      "search_patterns": [
+        "api_key",
+        "apikey",
+        "secret_key"
+      ],
+      "regex_pattern": "[a-zA-Z0-9]{32,}",
+      "confidence": "low",
+      "enabled": false
+    }
+  ]
+}
