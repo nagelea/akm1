@@ -1,7 +1,7 @@
 -- 创建RPC函数来获取带敏感数据的密钥
 -- 这样可以绕过嵌套查询的权限问题
 
-CREATE OR REPLACE FUNCTION get_keys_with_sensitive_data()
+CREATE OR REPLACE FUNCTION get_keys_with_sensitive_data(limit_count integer DEFAULT NULL)
 RETURNS TABLE (
     id bigint,
     key_type text,
@@ -54,7 +54,8 @@ AS $$
         END as leaked_keys_sensitive
     FROM leaked_keys lk
     LEFT JOIN leaked_keys_sensitive lks ON lk.id = lks.key_id
-    ORDER BY lk.created_at DESC;
+    ORDER BY lk.created_at DESC
+    LIMIT CASE WHEN limit_count IS NOT NULL THEN limit_count ELSE 5000 END;
 $$;
 
 -- 确保函数可以被调用

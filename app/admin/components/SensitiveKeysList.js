@@ -136,17 +136,19 @@ export default function SensitiveKeysList({ user, onStatsChange }) {
     }
   }
 
-  const fetchKeys = async () => {
+  const fetchKeys = async (limit = null) => {
     try {
       // 使用原生SQL查询，避免嵌套查询权限问题
-      const { data, error } = await supabase.rpc('get_keys_with_sensitive_data')
+      const { data, error } = await supabase.rpc('get_keys_with_sensitive_data', { 
+        limit_count: limit 
+      })
       
       if (error) {
         console.error('RPC call failed, falling back to manual query:', error)
         
         // 备用方案：分别查询然后合并
         const [keysResult, sensitiveResult] = await Promise.all([
-          supabase.from('leaked_keys').select('*').order('created_at', { ascending: false }),
+          supabase.from('leaked_keys').select('*').order('created_at', { ascending: false }).limit(limit || 5000),
           supabase.from('leaked_keys_sensitive').select('*')
         ])
         
@@ -168,6 +170,9 @@ export default function SensitiveKeysList({ user, onStatsChange }) {
       } else {
         setKeys(data || [])
         console.log('Loaded keys with RPC:', data?.length || 0)
+        if (data && data.length >= 5000) {
+          console.warn('⚠️ Query may have hit the limit. Total keys might be more than', data.length)
+        }
       }
     } catch (error) {
       console.error('Failed to fetch keys:', error)
@@ -443,15 +448,34 @@ export default function SensitiveKeysList({ user, onStatsChange }) {
       </div>
 
       <div className="flex justify-between items-center">
-        <h3 className="text-lg font-medium text-gray-900">
-          发现的API密钥 (显示 {startRecord}-{endRecord} / 共 {totalRecords} 条记录)
-        </h3>
-        <button
-          onClick={fetchKeys}
-          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-        >
-          刷新数据
-        </button>
+        <div>
+          <h3 className="text-lg font-medium text-gray-900">
+            发现的API密钥 (显示 {startRecord}-{endRecord} / 共 {totalRecords} 条记录)
+          </h3>
+          {keys.length >= 5000 && (
+            <p className="text-sm text-orange-600 mt-1">
+              ⚠️ 当前显示前 {keys.length} 条记录，可能还有更多数据
+            </p>
+          )}
+        </div>
+        <div className="flex space-x-2">
+          {keys.length >= 5000 && (
+            <button
+              onClick={() => fetchKeys(10000)}
+              className="px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700"
+              disabled={loading}
+            >
+              加载更多 (前10000条)
+            </button>
+          )}
+          <button
+            onClick={() => fetchKeys()}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+            disabled={loading}
+          >
+            刷新数据
+          </button>
+        </div>
       </div>
 
       {/* 密钥列表 - 显示筛选后的结果 */}
