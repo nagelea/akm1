@@ -176,6 +176,31 @@ class APIKeyScanner {
     );
     this.scannedToday = 0;
     this.foundToday = 0;
+    this.customPatterns = {}; // 存储动态添加的自定义模式
+  }
+
+  addCustomPattern(searchPattern, serviceName) {
+    // 从搜索模式生成正则表达式
+    // 注意：这里需要用户提供正则表达式格式的模式
+    try {
+      const regexPattern = new RegExp(searchPattern, 'g');
+      this.customPatterns.custom_dynamic = {
+        pattern: regexPattern,
+        name: serviceName,
+        confidence: 'medium'
+      };
+      console.log(`✅ Added custom pattern: ${searchPattern} for ${serviceName}`);
+    } catch (error) {
+      console.error(`❌ Invalid regex pattern: ${searchPattern}`, error.message);
+      // 尝试转换为简单的字符串匹配
+      const escapedPattern = searchPattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      this.customPatterns.custom_dynamic = {
+        pattern: new RegExp(escapedPattern, 'g'),
+        name: serviceName,
+        confidence: 'low'
+      };
+      console.log(`⚠️ Using escaped pattern: ${escapedPattern}`);
+    }
   }
 
   async run() {
@@ -193,13 +218,38 @@ class APIKeyScanner {
 
   async scanRecent() {
     const scanType = process.env.SCAN_TYPE || 'recent';
+    const customPattern = process.env.CUSTOM_PATTERN || '';
+    const customService = process.env.CUSTOM_SERVICE || 'Custom API';
     
     console.log(`📅 Scan mode: ${scanType}`);
+    if (scanType === 'custom') {
+      console.log(`🎯 Custom pattern: ${customPattern}`);
+      console.log(`🏷️ Custom service: ${customService}`);
+    }
     
     // 修复搜索策略 - 移除过严格的日期限制
     let queries = [];
     
-    if (scanType === 'recent') {
+    if (scanType === 'custom') {
+      // 自定义模式：使用用户提供的搜索模式
+      if (!customPattern) {
+        console.error('❌ Custom pattern is required for custom scan mode');
+        return;
+      }
+      
+      queries = [
+        `"${customPattern}" language:python NOT is:fork`,
+        `"${customPattern}" language:javascript NOT is:fork`,
+        `"${customPattern}" language:typescript NOT is:fork`,
+        `"${customPattern}" language:go NOT is:fork`,
+        `"${customPattern}" language:java NOT is:fork`,
+        `"${customPattern}" NOT is:fork`, // 通用搜索
+      ];
+      
+      // 动态添加自定义正则模式到检测器
+      this.addCustomPattern(customPattern, customService);
+      
+    } else if (scanType === 'recent') {
       // 最近活跃的仓库扫描 - 使用pushed而不是created
       const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
       queries = [
@@ -369,7 +419,8 @@ class APIKeyScanner {
       const fileContent = Buffer.from(content.data.content, 'base64').toString();
       
       // 检测各种API密钥
-      for (const [type, config] of Object.entries(KEY_PATTERNS)) {
+      const allPatterns = { ...KEY_PATTERNS, ...this.customPatterns };
+      for (const [type, config] of Object.entries(allPatterns)) {
         const matches = fileContent.match(config.pattern);
         if (matches) {
           for (const key of matches) {
@@ -389,8 +440,8 @@ class APIKeyScanner {
   }
 
   async processFoundKey(key, type, fileInfo, content) {
-    // 获取密钥类型配置
-    const keyConfig = KEY_PATTERNS[type];
+    // 获取密钥类型配置（包括自定义模式）
+    const keyConfig = KEY_PATTERNS[type] || this.customPatterns[type];
     
     // 过滤明显的假密钥
     if (this.isLikelyFake(key, content)) {
@@ -502,8 +553,8 @@ class APIKeyScanner {
     const contextEnd = Math.min(content.length, keyIndex + key.length + 200);
     const context = content.substring(contextStart, contextEnd).toLowerCase();
     
-    // 获取密钥配置中的上下文要求
-    const keyConfig = KEY_PATTERNS[type];
+    // 获取密钥配置中的上下文要求（包括自定义模式）
+    const keyConfig = KEY_PATTERNS[type] || this.customPatterns[type];
     const requiredContexts = keyConfig?.context_required || [];
     
     // 如果没有上下文要求，直接通过

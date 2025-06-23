@@ -16,6 +16,17 @@ on:
         options:
         - recent
         - full
+        - custom
+      custom_pattern:
+        description: 'Custom Search Pattern (when scan_type=custom)'
+        required: false
+        default: ''
+        type: string
+      custom_service:
+        description: 'Custom Service Name (when scan_type=custom)'
+        required: false
+        default: 'Custom API'
+        type: string
 
 jobs:
   scan:
@@ -42,6 +53,8 @@ jobs:
         # 确定扫描类型
         if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
           SCAN_TYPE="${{ github.event.inputs.scan_type || 'recent' }}"
+          CUSTOM_PATTERN="${{ github.event.inputs.custom_pattern || '' }}"
+          CUSTOM_SERVICE="${{ github.event.inputs.custom_service || 'Custom API' }}"
         else
           # 定时任务：根据当前小时判断扫描类型
           CURRENT_HOUR=$(date -u +%H)
@@ -50,18 +63,26 @@ jobs:
           else
             SCAN_TYPE="recent"
           fi
+          CUSTOM_PATTERN=""
+          CUSTOM_SERVICE=""
         fi
         
         echo "🔍 Starting API Key Scan..."
         echo "Event: ${{ github.event_name }}"
         echo "Current UTC Hour: $(date -u +%H)"
         echo "Scan Type: $SCAN_TYPE"
+        if [ "$SCAN_TYPE" = "custom" ]; then
+          echo "Custom Pattern: $CUSTOM_PATTERN"
+          echo "Custom Service: $CUSTOM_SERVICE"
+        fi
         echo "GitHub Token: $(echo $GITHUB_TOKEN | head -c 10)***"
         echo "Supabase URL: $SUPABASE_URL"
         echo "Service Key: $(echo $SUPABASE_SERVICE_KEY | head -c 10)***"
         
         # 设置环境变量并运行扫描器
         export SCAN_TYPE=$SCAN_TYPE
+        export CUSTOM_PATTERN="$CUSTOM_PATTERN"
+        export CUSTOM_SERVICE="$CUSTOM_SERVICE"
         node scripts/scanner.js
         
         # 检查扫描结果
