@@ -725,9 +725,19 @@ class APIKeyScanner {
     }
   }
 
-  maskKey(key) {
+  maskKey(key, maxLength = 100) {
     if (key.length <= 8) return '*'.repeat(key.length);
-    return key.substring(0, 6) + '*'.repeat(Math.max(key.length - 12, 4)) + key.substring(key.length - 6);
+    
+    const basicMask = key.substring(0, 6) + '*'.repeat(Math.max(key.length - 12, 4)) + key.substring(key.length - 6);
+    
+    // If it exceeds maxLength, truncate intelligently
+    if (basicMask.length > maxLength) {
+      const availableMiddle = maxLength - 12; // 6 chars start + 6 chars end
+      const truncatedMask = key.substring(0, 6) + '*'.repeat(Math.max(availableMiddle, 4)) + key.substring(key.length - 6);
+      return truncatedMask;
+    }
+    
+    return basicMask;
   }
 
   extractContext(key, content) {

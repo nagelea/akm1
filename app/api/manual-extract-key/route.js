@@ -126,11 +126,19 @@ function generateKeyHash(key) {
   return Math.abs(hash).toString(16)
 }
 
-function maskKey(key) {
+function maskKey(key, maxLength = 100) {
   if (key.length <= 8) return '***'
-  const start = key.substring(0, 8)
-  const end = key.substring(key.length - 4)
-  return `${start}...${end}`
+  
+  const basicMask = key.substring(0, 8) + '...' + key.substring(key.length - 4)
+  
+  // If it exceeds maxLength, truncate intelligently  
+  if (basicMask.length > maxLength) {
+    const start = key.substring(0, 6)
+    const end = key.substring(key.length - 4)
+    return `${start}...${end}`
+  }
+  
+  return basicMask
 }
 
 function assessSeverity(keyType, confidence) {
