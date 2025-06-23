@@ -232,6 +232,7 @@ class APIKeyScanner {
     
     if (scanType === 'custom') {
       // 自定义模式：使用用户提供的搜索模式
+      console.log('🎯 Executing CUSTOM scan mode - only custom patterns will be used');
       if (!customPattern) {
         console.error('❌ Custom pattern is required for custom scan mode');
         return;
@@ -245,6 +246,9 @@ class APIKeyScanner {
         `"${customPattern}" language:java NOT is:fork`,
         `"${customPattern}" NOT is:fork`, // 通用搜索
       ];
+      
+      console.log(`📋 Generated ${queries.length} custom search queries`);
+      console.log('🚫 Skipping all predefined patterns - using ONLY custom pattern');
       
       // 动态添加自定义正则模式到检测器
       this.addCustomPattern(customPattern, customService);
@@ -291,7 +295,7 @@ class APIKeyScanner {
         `"sk-svcacct-" pushed:>${yesterday} NOT is:fork`,
         `"AIza" pushed:>${yesterday} NOT is:fork`,
       ];
-    } else {
+    } else if (scanType === 'full') {
       // 全面扫描 - 使用更广泛的搜索
       queries = [
         // OpenAI系列
@@ -352,6 +356,10 @@ class APIKeyScanner {
         `"ANTHROPIC_API_KEY" filename:.env`,
         `"GROQ_API_KEY" filename:.env`,
       ];
+    } else {
+      console.error(`❌ Unknown scan type: ${scanType}`);
+      console.log('✅ Valid scan types: custom, recent, full');
+      return;
     }
 
     for (const query of queries) {
