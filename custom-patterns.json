@@ -88,6 +88,17 @@
       "enabled": false
     },
     {
+      "name": "OpenRouter API Keys",
+      "search_patterns": [
+        "sk-or-",
+        "openrouter",
+        "OPENROUTER_API_KEY"
+      ],
+      "regex_pattern": "sk-or-[a-zA-Z0-9-]{32,70}",
+      "confidence": "high",
+      "enabled": true
+    },
+    {
       "name": "Custom API Keys",
       "search_patterns": [
         "api_key",
