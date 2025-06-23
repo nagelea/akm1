@@ -6,7 +6,6 @@ import KeyStatistics from './KeyStatistics'
 
 export default function SensitiveKeysList({ user, onStatsChange }) {
   const [keys, setKeys] = useState([])
-  const [filteredKeys, setFilteredKeys] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedKey, setSelectedKey] = useState(null)
   const [showFullKey, setShowFullKey] = useState(false)
@@ -27,87 +26,30 @@ export default function SensitiveKeysList({ user, onStatsChange }) {
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const [paginatedKeys, setPaginatedKeys] = useState([])
+  const [totalRecords, setTotalRecords] = useState(0)
 
   useEffect(() => {
     fetchKeys()
-  }, [])
+  }, [currentPage, pageSize, searchQuery, filters])
 
   useEffect(() => {
-    applyFilters()
-  }, [keys, filters, searchQuery])
-
-  useEffect(() => {
-    // 应用分页
-    const startIndex = (currentPage - 1) * pageSize
-    const endIndex = startIndex + pageSize
-    setPaginatedKeys(filteredKeys.slice(startIndex, endIndex))
-  }, [filteredKeys, currentPage, pageSize])
+    // 使用数据库分页时，不需要前端筛选
+    if (keys.length > 0) {
+      setPaginatedKeys(keys)
+      // 从第一条记录获取总数
+      if (keys[0] && keys[0].total_count !== undefined) {
+        setTotalRecords(keys[0].total_count)
+      }
+    } else {
+      setPaginatedKeys([])
+      setTotalRecords(0)
+    }
+  }, [keys])
 
   // 计算分页信息
-  const totalPages = Math.ceil(filteredKeys.length / pageSize)
-  const totalRecords = filteredKeys.length
+  const totalPages = Math.ceil(totalRecords / pageSize)
   const startRecord = totalRecords > 0 ? (currentPage - 1) * pageSize + 1 : 0
   const endRecord = Math.min(currentPage * pageSize, totalRecords)
-
-  const applyFilters = () => {
-    if (!keys || keys.length === 0) {
-      setFilteredKeys([])
-      return
-    }
-
-    let filtered = keys
-
-    // 按密钥类型筛选
-    if (filters.keyType !== 'all') {
-      filtered = filtered.filter(key => key.key_type === filters.keyType)
-    }
-
-    // 按严重程度筛选
-    if (filters.severity !== 'all') {
-      filtered = filtered.filter(key => key.severity === filters.severity)
-    }
-
-    // 按置信度筛选
-    if (filters.confidence !== 'all') {
-      filtered = filtered.filter(key => key.confidence === filters.confidence)
-    }
-
-    // 按验证状态筛选
-    if (filters.status !== 'all') {
-      filtered = filtered.filter(key => key.status === filters.status)
-    }
-
-    // 搜索功能
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase().trim()
-      filtered = filtered.filter(key => {
-        // 搜索仓库名
-        const repoMatch = key.repo_name?.toLowerCase().includes(query)
-        
-        // 搜索文件路径
-        const fileMatch = key.file_path?.toLowerCase().includes(query)
-        
-        // 搜索密钥预览
-        const keyMatch = key.key_preview?.toLowerCase().includes(query)
-        
-        // 搜索上下文预览
-        const contextMatch = key.context_preview?.toLowerCase().includes(query)
-        
-        // 搜索完整上下文（如果有）
-        const fullContextMatch = key.leaked_keys_sensitive?.raw_context?.toLowerCase().includes(query)
-        
-        // 搜索编程语言
-        const languageMatch = key.repo_language?.toLowerCase().includes(query)
-        
-        // 搜索密钥类型名称
-        const typeMatch = key.key_type?.toLowerCase().includes(query)
-        
-        return repoMatch || fileMatch || keyMatch || contextMatch || fullContextMatch || languageMatch || typeMatch
-      })
-    }
-
-    setFilteredKeys(filtered)
-  }
 
   const handleFilterChange = (newFilters) => {
     setFilters(newFilters)
@@ -136,46 +78,92 @@ export default function SensitiveKeysList({ user, onStatsChange }) {
     }
   }
 
-  const fetchKeys = async (limit = null) => {
+  const fetchKeys = async () => {
     try {
-      // 使用原生SQL查询，避免嵌套查询权限问题
-      const { data, error } = await supabase.rpc('get_keys_with_sensitive_data', { 
-        limit_count: limit 
+      setLoading(true)
+      
+      // 使用新的分页函数获取当前页数据
+      const offset = (currentPage - 1) * pageSize
+      
+      const { data, error } = await supabase.rpc('get_keys_paginated', {
+        page_offset: offset,
+        page_size: pageSize,
+        search_query: searchQuery || '',
+        filter_key_type: filters.keyType || 'all',
+        filter_severity: filters.severity || 'all', 
+        filter_confidence: filters.confidence || 'all',
+        filter_status: filters.status || 'all'
       })
       
       if (error) {
-        console.error('RPC call failed, falling back to manual query:', error)
+        console.error('分页查询失败，回退到原方法:', error)
         
-        // 备用方案：分别查询然后合并
-        const [keysResult, sensitiveResult] = await Promise.all([
-          supabase.from('leaked_keys').select('*').order('created_at', { ascending: false }).limit(limit || 5000),
-          supabase.from('leaked_keys_sensitive').select('*')
-        ])
-        
-        if (keysResult.error || sensitiveResult.error) {
-          throw new Error('Both queries failed')
-        }
-        
-        // 手动合并数据
-        const keysWithSensitive = keysResult.data.map(key => {
-          const sensitive = sensitiveResult.data.find(s => s.key_id === key.id)
-          return {
-            ...key,
-            leaked_keys_sensitive: sensitive || null
-          }
+        // 备用方案：使用原来的方法
+        const { data: fallbackData, error: fallbackError } = await supabase.rpc('get_keys_with_sensitive_data', { 
+          limit_count: 5000 
         })
         
-        setKeys(keysWithSensitive)
-        console.log('Loaded keys with manual merge:', keysWithSensitive.length)
+        if (fallbackError) {
+          // 最终备用方案：分别查询
+          const [keysResult, sensitiveResult] = await Promise.all([
+            supabase.from('leaked_keys').select('*').order('created_at', { ascending: false }).limit(5000),
+            supabase.from('leaked_keys_sensitive').select('*')
+          ])
+          
+          if (keysResult.error || sensitiveResult.error) {
+            throw new Error('所有查询方法都失败了')
+          }
+          
+          // 手动合并数据
+          const keysWithSensitive = keysResult.data.map(key => {
+            const sensitive = sensitiveResult.data.find(s => s.key_id === key.id)
+            return {
+              ...key,
+              leaked_keys_sensitive: sensitive || null
+            }
+          })
+          
+          setKeys(keysWithSensitive)
+          console.log('使用手动合并方法加载:', keysWithSensitive.length, '条记录')
+        } else {
+          setKeys(fallbackData || [])
+          console.log('使用备用RPC方法加载:', fallbackData?.length || 0, '条记录')
+        }
       } else {
-        setKeys(data || [])
-        console.log('Loaded keys with RPC:', data?.length || 0)
-        if (data && data.length >= 5000) {
-          console.warn('⚠️ Query may have hit the limit. Total keys might be more than', data.length)
+        // 成功使用新的分页函数
+        if (data && data.length > 0) {
+          // 数据格式转换：新的分页函数返回扁平结构
+          const transformedData = data.map(row => ({
+            id: row.id,
+            key_type: row.key_type,
+            key_preview: row.key_preview,
+            severity: row.severity,
+            confidence: row.confidence,
+            status: row.status,
+            repo_name: row.repo_name,
+            file_path: row.file_path,
+            repo_language: row.repo_language,
+            first_seen: row.first_seen,
+            last_verified: row.last_verified,
+            context_preview: row.context_preview,
+            leaked_keys_sensitive: row.full_key ? {
+              full_key: row.full_key,
+              raw_context: row.raw_context,
+              github_url: row.github_url
+            } : null
+          }))
+          
+          setKeys(transformedData)
+          
+          // 总记录数会在useEffect中从数据中提取
+          const totalCount = data[0]?.total_count || 0
+          console.log(`✅ 使用分页查询加载: ${data.length} 条记录，总共 ${totalCount} 条`)
+        } else {
+          setKeys([])
         }
       }
     } catch (error) {
-      console.error('Failed to fetch keys:', error)
+      console.error('获取密钥失败:', error)
     } finally {
       setLoading(false)
     }

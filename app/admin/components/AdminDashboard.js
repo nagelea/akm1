@@ -17,60 +17,65 @@ export default function AdminDashboard({ user }) {
     try {
       console.log('Refreshing stats...')
       
-      // 使用数据库聚合查询来获取准确统计，避免行数限制
-      const [totalCountResult, todayCountResult, severityResult, statusResult] = await Promise.all([
-        // 总数统计
-        supabase.from('leaked_keys').select('id', { count: 'exact', head: true }),
+      // 尝试使用新的统计函数
+      const { data: dashboardStats, error: dashboardError } = await supabase
+        .rpc('get_dashboard_stats')
+      
+      if (dashboardError) {
+        console.log('新统计函数不可用，使用备用方法:', dashboardError)
         
-        // 今日新增统计
-        supabase.from('leaked_keys')
-          .select('id', { count: 'exact', head: true })
-          .gte('created_at', new Date().toISOString().split('T')[0]),
-        
-        // 严重程度统计
-        supabase.from('leaked_keys')
-          .select('id', { count: 'exact', head: true })
-          .eq('severity', 'high'),
-        
-        // 验证状态统计
-        supabase.from('leaked_keys')
-          .select('id', { count: 'exact', head: true })
-          .eq('status', 'valid')
-      ])
+        // 备用方案：使用原来的聚合查询
+        const [totalCountResult, todayCountResult, severityResult, statusResult] = await Promise.all([
+          supabase.from('leaked_keys').select('id', { count: 'exact', head: true }),
+          supabase.from('leaked_keys')
+            .select('id', { count: 'exact', head: true })
+            .gte('created_at', new Date().toISOString().split('T')[0]),
+          supabase.from('leaked_keys')
+            .select('id', { count: 'exact', head: true })
+            .eq('severity', 'high'),
+          supabase.from('leaked_keys')
+            .select('id', { count: 'exact', head: true })
+            .eq('status', 'valid')
+        ])
 
-      const stats = {
-        total: totalCountResult.count || 0,
-        today: todayCountResult.count || 0,
-        high_severity: severityResult.count || 0,
-        verified: statusResult.count || 0
+        const stats = {
+          total: totalCountResult.count || 0,
+          today: todayCountResult.count || 0,
+          high_severity: severityResult.count || 0,
+          verified: statusResult.count || 0
+        }
+        
+        console.log('备用统计数据:', stats)
+        setStats(stats)
+      } else if (dashboardStats && dashboardStats.length > 0) {
+        // 使用新的统计函数数据
+        const stats = dashboardStats[0]
+        const formattedStats = {
+          total: stats.total_keys || 0,
+          today: stats.today_keys || 0,
+          high_severity: stats.high_severity_keys || 0,
+          verified: stats.verified_keys || 0
+        }
+        
+        console.log('✅ 使用新统计函数:', formattedStats)
+        console.log('详细分布:', {
+          key_types: stats.key_type_distribution,
+          severities: stats.severity_distribution,
+          statuses: stats.status_distribution
+        })
+        
+        setStats(formattedStats)
       }
-      
-      console.log('Stats computed using aggregation:', stats)
-      
-      // 获取状态分布详情用于调试
-      const [unknownResult, invalidResult] = await Promise.all([
-        supabase.from('leaked_keys').select('id', { count: 'exact', head: true }).eq('status', 'unknown'),
-        supabase.from('leaked_keys').select('id', { count: 'exact', head: true }).eq('status', 'invalid')
-      ])
-      
-      console.log('Detailed status distribution:', {
-        valid: stats.verified,
-        invalid: invalidResult.count || 0,
-        unknown: unknownResult.count || 0,
-        total: stats.total
-      })
-      
-      setStats(stats)
     } catch (error) {
-      console.error('Failed to fetch stats:', error)
+      console.error('统计获取失败:', error)
       
-      // 降级到原来的方法，但显式请求更多数据
+      // 最终降级到原来的方法
       try {
-        console.log('Falling back to row-based counting with higher limit...')
+        console.log('降级到基于行计数的方法...')
         const { data } = await supabase
           .from('leaked_keys')
           .select('id, severity, confidence, status, created_at')
-          .limit(50000) // 显式设置更高的限制
+          .limit(50000)
         
         if (data) {
           const today = new Date().toDateString()
@@ -81,11 +86,11 @@ export default function AdminDashboard({ user }) {
             verified: data.filter(k => k.status === 'valid').length
           }
           
-          console.log('Fallback stats (may be incomplete if >50000 records):', stats)
+          console.log('降级统计数据 (可能不完整):', stats)
           setStats(stats)
         }
       } catch (fallbackError) {
-        console.error('Fallback method also failed:', fallbackError)
+        console.error('所有统计方法都失败了:', fallbackError)
       }
     }
   }

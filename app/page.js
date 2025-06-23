@@ -19,21 +19,52 @@ export default function Home() {
 
   async function fetchData() {
     try {
-      // 获取统计数据
-      const { data: statsData } = await supabase
-        .from('stats_summary')
-        .select('*')
-        .single()
+      // 尝试使用新的统计函数
+      const { data: statsData, error: statsError } = await supabase
+        .rpc('get_dashboard_stats')
 
-      // 获取最近发现的密钥
-      const { data: keysData } = await supabase
-        .from('recent_keys')
-        .select('*')
-        .order('first_seen', { ascending: false })
-        .limit(50)
+      if (statsError) {
+        console.log('新统计函数不可用，使用备用方法:', statsError)
+        
+        // 备用方案：使用原来的方法
+        const { data: fallbackStats } = await supabase
+          .from('stats_summary')
+          .select('*')
+          .single()
+        
+        setStats(fallbackStats)
+      } else if (statsData && statsData.length > 0) {
+        // 转换新统计数据格式
+        const stats = statsData[0]
+        setStats({
+          total_keys: stats.total_keys,
+          today_keys: stats.today_keys,
+          high_severity: stats.high_severity_keys,
+          verified_keys: stats.verified_keys,
+          key_type_distribution: stats.key_type_distribution,
+          severity_distribution: stats.severity_distribution,
+          status_distribution: stats.status_distribution
+        })
+      }
 
-      setStats(statsData)
-      setRecentKeys(keysData || [])
+      // 尝试使用新的最新密钥函数
+      const { data: keysData, error: keysError } = await supabase
+        .rpc('get_recent_keys', { limit_count: 50 })
+
+      if (keysError) {
+        console.log('新密钥函数不可用，使用备用方法:', keysError)
+        
+        // 备用方案：使用原来的方法
+        const { data: fallbackKeys } = await supabase
+          .from('recent_keys')
+          .select('*')
+          .order('first_seen', { ascending: false })
+          .limit(50)
+        
+        setRecentKeys(fallbackKeys || [])
+      } else {
+        setRecentKeys(keysData || [])
+      }
     } catch (error) {
       console.error('Error fetching data:', error)
     } finally {
