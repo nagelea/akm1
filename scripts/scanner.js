@@ -222,6 +222,15 @@ class APIKeyScanner {
     this.foundToday = 0;
     this.customPatterns = {}; // 存储动态添加的自定义模式
     this.fileBasedPatterns = loadCustomPatterns(); // 加载文件定义的模式
+    
+    // 分页配置
+    this.paginationConfig = {
+      enabled: process.env.ENABLE_PAGINATION === 'true' || false,
+      maxPages: parseInt(process.env.MAX_PAGES) || 3,
+      perPage: parseInt(process.env.PER_PAGE) || 30
+    };
+    
+    console.log(`📄 Pagination config: enabled=${this.paginationConfig.enabled}, maxPages=${this.paginationConfig.maxPages}, perPage=${this.paginationConfig.perPage}`);
   }
 
   addCustomPattern(searchPattern, serviceName) {
@@ -447,24 +456,60 @@ class APIKeyScanner {
     try {
       console.log(`🔎 Searching: ${query}`);
       
-      const results = await this.octokit.rest.search.code({
-        q: query,
-        per_page: 30,
-        sort: 'indexed'
-      });
+      let totalProcessed = 0;
+      let currentPage = 1;
+      const maxPages = this.paginationConfig.enabled ? this.paginationConfig.maxPages : 1;
+      
+      while (currentPage <= maxPages) {
+        console.log(`📄 Processing page ${currentPage}/${maxPages}...`);
+        
+        const results = await this.octokit.rest.search.code({
+          q: query,
+          per_page: this.paginationConfig.perPage,
+          page: currentPage,
+          sort: 'indexed'
+        });
 
-      console.log(`📄 Found ${results.data.items.length} files (total: ${results.data.total_count})`);
+        const totalCount = results.data.total_count;
+        const currentPageItems = results.data.items.length;
+        totalProcessed += currentPageItems;
 
-      if (results.data.items.length === 0) {
-        console.log(`⚠️  No results for query: ${query}`);
+        if (currentPage === 1) {
+          console.log(`📄 Found ${currentPageItems} files on page 1 (total available: ${totalCount})`);
+        } else {
+          console.log(`📄 Found ${currentPageItems} files on page ${currentPage} (processed so far: ${totalProcessed})`);
+        }
+
+        if (currentPageItems === 0) {
+          console.log(`⚠️  No results on page ${currentPage} for query: ${query}`);
+          break;
+        }
+
+        for (const item of results.data.items) {
+          this.scannedToday++;
+          console.log(`🔍 Analyzing: ${item.repository.full_name}/${item.path} (page ${currentPage})`);
+          await this.analyzeFile(item);
+          await this.sleep(800); // 分析文件间的延迟
+        }
+
+        // 如果分页未启用或已达到最后一页，退出
+        if (!this.paginationConfig.enabled || currentPageItems < this.paginationConfig.perPage) {
+          break;
+        }
+
+        // 页面间延迟，避免API限流
+        if (currentPage < maxPages) {
+          console.log(`⏳ Waiting 3s before next page...`);
+          await this.sleep(3000);
+        }
+
+        currentPage++;
       }
 
-      for (const item of results.data.items) {
-        this.scannedToday++;
-        console.log(`🔍 Analyzing: ${item.repository.full_name}/${item.path}`);
-        await this.analyzeFile(item);
-        await this.sleep(800); // 稍微减少延迟
+      if (this.paginationConfig.enabled && totalProcessed > 0) {
+        console.log(`✅ Completed processing ${totalProcessed} files across ${currentPage} pages for query: ${query}`);
       }
+
     } catch (error) {
       if (error.status === 403) {
         console.log('⏳ Rate limited, waiting 60s...');
