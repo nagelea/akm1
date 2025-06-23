@@ -95,7 +95,7 @@
         "/sk-or-[a-zA-Z0-9-]{32,70}/",
         "OPENROUTER_API_KEY"
       ],
-      "regex_pattern": "sk-or-[a-zA-Z0-9-]{32,70}",
+      "regex_pattern": "sk-or-[a-zA-Z0-9-]{32,70}(?![a-zA-Z0-9-])",
       "confidence": "high",
       "enabled": true
     },
