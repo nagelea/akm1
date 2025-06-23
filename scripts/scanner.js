@@ -272,6 +272,9 @@ class APIKeyScanner {
       console.log(`🏷️ Custom service: ${customService}`);
     }
     
+    // 设置当前扫描模式，供文件分析时使用
+    this.currentScanType = scanType;
+    
     // 修复搜索策略 - 移除过严格的日期限制
     let queries = [];
     
@@ -493,8 +496,23 @@ class APIKeyScanner {
 
       const fileContent = Buffer.from(content.data.content, 'base64').toString();
       
-      // 检测各种API密钥
-      const allPatterns = { ...KEY_PATTERNS, ...this.customPatterns, ...this.fileBasedPatterns };
+      // 检测各种API密钥 - 根据扫描模式选择使用的模式
+      let allPatterns;
+      
+      if (this.currentScanType === 'custom') {
+        // custom模式：只使用动态添加的自定义模式
+        allPatterns = { ...this.customPatterns };
+        console.log(`🔍 Using ONLY custom patterns for detection (${Object.keys(allPatterns).length} patterns)`);
+      } else if (this.currentScanType === 'file_custom') {
+        // file_custom模式：只使用文件定义的模式
+        allPatterns = { ...this.fileBasedPatterns };
+        console.log(`🔍 Using ONLY file-based patterns for detection (${Object.keys(allPatterns).length} patterns)`);
+      } else {
+        // 其他模式：使用所有模式
+        allPatterns = { ...KEY_PATTERNS, ...this.customPatterns, ...this.fileBasedPatterns };
+        console.log(`🔍 Using ALL patterns for detection (${Object.keys(allPatterns).length} patterns)`);
+      }
+      
       for (const [type, config] of Object.entries(allPatterns)) {
         const matches = fileContent.match(config.pattern);
         if (matches) {
@@ -515,8 +533,16 @@ class APIKeyScanner {
   }
 
   async processFoundKey(key, type, fileInfo, content) {
-    // 获取密钥类型配置（包括自定义模式）
-    const keyConfig = KEY_PATTERNS[type] || this.customPatterns[type] || this.fileBasedPatterns[type];
+    // 获取密钥类型配置 - 根据当前扫描模式决定查找范围
+    let keyConfig;
+    
+    if (this.currentScanType === 'custom') {
+      keyConfig = this.customPatterns[type];
+    } else if (this.currentScanType === 'file_custom') {
+      keyConfig = this.fileBasedPatterns[type];
+    } else {
+      keyConfig = KEY_PATTERNS[type] || this.customPatterns[type] || this.fileBasedPatterns[type];
+    }
     
     // 过滤明显的假密钥
     if (this.isLikelyFake(key, content)) {
@@ -628,8 +654,16 @@ class APIKeyScanner {
     const contextEnd = Math.min(content.length, keyIndex + key.length + 200);
     const context = content.substring(contextStart, contextEnd).toLowerCase();
     
-    // 获取密钥配置中的上下文要求（包括自定义模式）
-    const keyConfig = KEY_PATTERNS[type] || this.customPatterns[type] || this.fileBasedPatterns[type];
+    // 获取密钥配置中的上下文要求 - 根据当前扫描模式决定查找范围
+    let keyConfig;
+    
+    if (this.currentScanType === 'custom') {
+      keyConfig = this.customPatterns[type];
+    } else if (this.currentScanType === 'file_custom') {
+      keyConfig = this.fileBasedPatterns[type];
+    } else {
+      keyConfig = KEY_PATTERNS[type] || this.customPatterns[type] || this.fileBasedPatterns[type];
+    }
     const requiredContexts = keyConfig?.context_required || [];
     
     // 如果没有上下文要求，直接通过
