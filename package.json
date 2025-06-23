@@ -11,6 +11,7 @@
     "db:migrate": "node scripts/setup-db.js",
     "db:paginate": "node scripts/setup-paginated-rpc.js",
     "db:pagination": "node scripts/setup-pagination-functions.js",
+    "db:detect": "node scripts/detect-table-structure.js",
     "clean:incomplete": "node scripts/cleanup-incomplete-keys.js",
     "sql:cleanup": "node scripts/run-sql-cleanup.js",
     "fix:incomplete": "node scripts/fix-incomplete-keys.js"

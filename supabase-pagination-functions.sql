@@ -12,7 +12,7 @@ CREATE OR REPLACE FUNCTION get_keys_paginated(
 )
 RETURNS TABLE (
   total_count BIGINT,
-  id UUID,
+  id INTEGER,  -- 修复：改为INTEGER类型以匹配数据库
   key_type TEXT,
   key_preview TEXT,
   severity TEXT,
@@ -170,7 +170,7 @@ $$;
 -- 3. 主页最新密钥函数
 CREATE OR REPLACE FUNCTION get_recent_keys(limit_count INTEGER DEFAULT 50)
 RETURNS TABLE (
-  id UUID,
+  id INTEGER,  -- 修复：改为INTEGER类型以匹配数据库
   key_type TEXT,
   key_preview TEXT,
   severity TEXT,

@@ -1,19 +1,9 @@
-# 添加分页功能指南
+-- 修复分页函数的数据类型问题
 
-由于Supabase的限制，需要手动在数据库中添加分页函数。
+-- 首先检查leaked_keys表的实际结构
+-- SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'leaked_keys';
 
-## 步骤1：登录Supabase控制台
-
-1. 打开 https://supabase.com/dashboard
-2. 进入你的项目：https://supabase.com/dashboard/project/uggzdzixrykmexoutqbj
-3. 进入 **SQL Editor**
-
-## 步骤2：执行分页函数SQL
-
-将以下SQL代码复制粘贴到SQL Editor中执行：
-
-```sql
--- 1. 基础分页查询函数
+-- 修复后的分页查询函数
 CREATE OR REPLACE FUNCTION get_keys_paginated(
   page_offset INTEGER DEFAULT 0,
   page_size INTEGER DEFAULT 20,
@@ -25,7 +15,7 @@ CREATE OR REPLACE FUNCTION get_keys_paginated(
 )
 RETURNS TABLE (
   total_count BIGINT,
-  id INTEGER,  -- ✅ 修复：使用INTEGER类型以匹配数据库
+  id INTEGER,  -- 改为INTEGER类型
   key_type TEXT,
   key_preview TEXT,
   severity TEXT,
@@ -140,50 +130,10 @@ BEGIN
 END;
 $$;
 
--- 2. 快速统计函数（用于仪表板）
-CREATE OR REPLACE FUNCTION get_dashboard_stats()
-RETURNS TABLE (
-  total_keys BIGINT,
-  today_keys BIGINT,
-  high_severity_keys BIGINT,
-  verified_keys BIGINT,
-  key_type_distribution JSONB,
-  severity_distribution JSONB,
-  status_distribution JSONB
-)
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-BEGIN
-  RETURN QUERY
-  SELECT 
-    (SELECT COUNT(*) FROM leaked_keys)::BIGINT,
-    (SELECT COUNT(*) FROM leaked_keys WHERE created_at >= CURRENT_DATE)::BIGINT,
-    (SELECT COUNT(*) FROM leaked_keys WHERE severity = 'high')::BIGINT,
-    (SELECT COUNT(*) FROM leaked_keys WHERE status = 'valid')::BIGINT,
-    (SELECT jsonb_object_agg(key_type, count) FROM (
-      SELECT key_type, COUNT(*) as count 
-      FROM leaked_keys 
-      GROUP BY key_type 
-      ORDER BY count DESC
-    ) t)::JSONB,
-    (SELECT jsonb_object_agg(severity, count) FROM (
-      SELECT severity, COUNT(*) as count 
-      FROM leaked_keys 
-      GROUP BY severity
-    ) t)::JSONB,
-    (SELECT jsonb_object_agg(status, count) FROM (
-      SELECT status, COUNT(*) as count 
-      FROM leaked_keys 
-      GROUP BY status
-    ) t)::JSONB;
-END;
-$$;
-
--- 3. 主页最新密钥函数
+-- 修复最新密钥函数
 CREATE OR REPLACE FUNCTION get_recent_keys(limit_count INTEGER DEFAULT 50)
 RETURNS TABLE (
-  id INTEGER,  -- ✅ 修复：使用INTEGER类型以匹配数据库
+  id INTEGER,  -- 改为INTEGER类型
   key_type TEXT,
   key_preview TEXT,
   severity TEXT,
@@ -211,23 +161,3 @@ BEGIN
   LIMIT limit_count;
 END;
 $$;
-```
-
-## 步骤3：测试函数
-
-执行以下测试查询确认函数工作正常：
-
-```sql
--- 测试分页功能
-SELECT * FROM get_keys_paginated(0, 5);
-
--- 测试统计功能  
-SELECT * FROM get_dashboard_stats();
-
--- 测试最新密钥
-SELECT * FROM get_recent_keys(10);
-```
-
-## 步骤4：继续前端优化
-
-函数创建成功后，前端代码会自动使用新的分页功能。
