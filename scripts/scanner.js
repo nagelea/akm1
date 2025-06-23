@@ -4,15 +4,10 @@ const crypto = require('crypto');
 
 // API密钥检测模式 - 扩展版本，按优先级排序
 const KEY_PATTERNS = {
-  // 高特异性模式（优先检测）
+  // 最高特异性模式（优先检测具体格式）
   anthropic: {
     pattern: /sk-ant-api\d+-[a-zA-Z0-9_-]+/g,
     name: 'Anthropic Claude',
-    confidence: 'high'
-  },
-  openai: {
-    pattern: /sk-[a-zA-Z0-9]{48}/g,
-    name: 'OpenAI',
     confidence: 'high'
   },
   openai_project: {
@@ -28,6 +23,11 @@ const KEY_PATTERNS = {
   openai_service: {
     pattern: /sk-svcacct-[a-zA-Z0-9_-]{64,}/g,
     name: 'OpenAI Service Account',
+    confidence: 'high'
+  },
+  openai: {
+    pattern: /sk-[a-zA-Z0-9]{48}/g,
+    name: 'OpenAI',
     confidence: 'high'
   },
   openai_org: {

@@ -7,11 +7,6 @@ const supabase = createClient(
 
 // 密钥模式定义
 const KEY_PATTERNS = {
-  openai: {
-    pattern: /sk-[a-zA-Z0-9]{48}/g,
-    name: 'OpenAI',
-    confidence: 'high'
-  },
   openai_project: {
     pattern: /sk-proj-[a-zA-Z0-9_-]{64,}/g,
     name: 'OpenAI Project',
@@ -25,6 +20,11 @@ const KEY_PATTERNS = {
   openai_service: {
     pattern: /sk-svcacct-[a-zA-Z0-9_-]{64,}/g,
     name: 'OpenAI Service Account',
+    confidence: 'high'
+  },
+  openai: {
+    pattern: /sk-[a-zA-Z0-9]{48}/g,
+    name: 'OpenAI',
     confidence: 'high'
   },
   openai_org: {

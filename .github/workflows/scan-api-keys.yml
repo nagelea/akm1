@@ -2,8 +2,10 @@ name: API Key Scanner
 
 on:
   schedule:
-    # 每6小时运行一次 (4次/天: 0:00, 6:00, 12:00, 18:00)
-    - cron: '0 */2 * * *'
+    # 每4小时运行一次 recent 扫描 (6次/天: 0:00, 4:00, 8:00, 12:00, 16:00, 20:00)
+    - cron: '0 */4 * * *'
+    # 每天运行一次 full 扫描 (每天 2:00)
+    - cron: '0 2 * * *'
   workflow_dispatch:
     inputs:
       scan_type:
@@ -36,15 +38,30 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
         SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-        SCAN_TYPE: ${{ github.event.inputs.scan_type || 'recent' }}
       run: |
+        # 确定扫描类型
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          SCAN_TYPE="${{ github.event.inputs.scan_type || 'recent' }}"
+        else
+          # 定时任务：根据当前小时判断扫描类型
+          CURRENT_HOUR=$(date -u +%H)
+          if [ "$CURRENT_HOUR" = "02" ]; then
+            SCAN_TYPE="full"
+          else
+            SCAN_TYPE="recent"
+          fi
+        fi
+        
         echo "🔍 Starting API Key Scan..."
+        echo "Event: ${{ github.event_name }}"
+        echo "Current UTC Hour: $(date -u +%H)"
         echo "Scan Type: $SCAN_TYPE"
         echo "GitHub Token: $(echo $GITHUB_TOKEN | head -c 10)***"
         echo "Supabase URL: $SUPABASE_URL"
         echo "Service Key: $(echo $SUPABASE_SERVICE_KEY | head -c 10)***"
         
-        # 运行扫描器
+        # 设置环境变量并运行扫描器
+        export SCAN_TYPE=$SCAN_TYPE
         node scripts/scanner.js
         
         # 检查扫描结果
