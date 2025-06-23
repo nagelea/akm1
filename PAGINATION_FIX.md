@@ -90,7 +90,35 @@ SELECT * FROM get_recent_keys(10);
 
 ## 部署流程
 
-1. 在Supabase SQL Editor中执行修复后的SQL
-2. 验证函数创建成功
-3. 前端自动使用新的分页功能
-4. 享受极速的数据浏览体验！
+### 快速修复（推荐）
+```sql
+-- 在Supabase SQL Editor中执行complete-pagination-fix.sql的内容
+-- 它会自动删除旧函数并重新创建正确的函数
+```
+
+### 手动修复
+如果遇到"cannot change return type"错误：
+
+1. **删除现有函数**:
+```sql
+DROP FUNCTION IF EXISTS get_keys_paginated(integer,integer,text,text,text,text,text);
+DROP FUNCTION IF EXISTS get_dashboard_stats();
+DROP FUNCTION IF EXISTS get_recent_keys(integer);
+```
+
+2. **重新创建函数**: 执行修复后的SQL
+
+3. **验证函数**: 运行测试查询
+
+4. **前端自动适配**: 享受极速的数据浏览体验！
+
+### 常见错误解决
+
+**错误1**: "cannot change return type of existing function"
+- **解决**: 使用`complete-pagination-fix.sql`，它包含DROP语句
+
+**错误2**: "structure of query does not match function result type"  
+- **解决**: 确保id字段类型为INTEGER而不是UUID
+
+**错误3**: "function does not exist"
+- **解决**: 重新执行创建函数的SQL

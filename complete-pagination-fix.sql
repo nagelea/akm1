@@ -1,25 +1,12 @@
-# 添加分页功能指南
+-- 完整的分页函数修复脚本
+-- 先删除现有函数，再重新创建正确类型的函数
 
-由于Supabase的限制，需要手动在数据库中添加分页函数。
+-- 1. 删除现有的函数
+DROP FUNCTION IF EXISTS get_keys_paginated(integer,integer,text,text,text,text,text);
+DROP FUNCTION IF EXISTS get_dashboard_stats();
+DROP FUNCTION IF EXISTS get_recent_keys(integer);
 
-## 步骤1：登录Supabase控制台
-
-1. 打开 https://supabase.com/dashboard
-2. 进入你的项目：https://supabase.com/dashboard/project/uggzdzixrykmexoutqbj
-3. 进入 **SQL Editor**
-
-## 步骤2：执行分页函数SQL
-
-⚠️ **重要提示**: 如果之前已经创建过函数，请使用 `complete-pagination-fix.sql` 文件，它会先删除旧函数再重新创建。
-
-### 方法1：完整修复（推荐）
-复制 `complete-pagination-fix.sql` 文件内容到SQL Editor中执行。
-
-### 方法2：首次安装
-将以下SQL代码复制粘贴到SQL Editor中执行：
-
-```sql
--- 1. 基础分页查询函数
+-- 2. 重新创建分页查询函数（正确的INTEGER类型）
 CREATE OR REPLACE FUNCTION get_keys_paginated(
   page_offset INTEGER DEFAULT 0,
   page_size INTEGER DEFAULT 20,
@@ -31,7 +18,7 @@ CREATE OR REPLACE FUNCTION get_keys_paginated(
 )
 RETURNS TABLE (
   total_count BIGINT,
-  id INTEGER,  -- ✅ 修复：使用INTEGER类型以匹配数据库
+  id INTEGER,  -- ✅ 正确的INTEGER类型
   key_type TEXT,
   key_preview TEXT,
   severity TEXT,
@@ -146,7 +133,7 @@ BEGIN
 END;
 $$;
 
--- 2. 快速统计函数（用于仪表板）
+-- 3. 重新创建统计函数
 CREATE OR REPLACE FUNCTION get_dashboard_stats()
 RETURNS TABLE (
   total_keys BIGINT,
@@ -186,10 +173,10 @@ BEGIN
 END;
 $$;
 
--- 3. 主页最新密钥函数
+-- 4. 重新创建最新密钥函数
 CREATE OR REPLACE FUNCTION get_recent_keys(limit_count INTEGER DEFAULT 50)
 RETURNS TABLE (
-  id INTEGER,  -- ✅ 修复：使用INTEGER类型以匹配数据库
+  id INTEGER,  -- ✅ 正确的INTEGER类型
   key_type TEXT,
   key_preview TEXT,
   severity TEXT,
@@ -217,23 +204,20 @@ BEGIN
   LIMIT limit_count;
 END;
 $$;
-```
 
-## 步骤3：测试函数
+-- 5. 授予执行权限
+GRANT EXECUTE ON FUNCTION get_keys_paginated TO authenticated;
+GRANT EXECUTE ON FUNCTION get_dashboard_stats TO authenticated;
+GRANT EXECUTE ON FUNCTION get_recent_keys TO authenticated;
 
-执行以下测试查询确认函数工作正常：
+-- 6. 测试函数是否工作正常
+SELECT 'Testing get_keys_paginated...' as test_status;
+SELECT COUNT(*) as paginated_test FROM get_keys_paginated(0, 1);
 
-```sql
--- 测试分页功能
-SELECT * FROM get_keys_paginated(0, 5);
+SELECT 'Testing get_dashboard_stats...' as test_status;
+SELECT total_keys FROM get_dashboard_stats() LIMIT 1;
 
--- 测试统计功能  
-SELECT * FROM get_dashboard_stats();
+SELECT 'Testing get_recent_keys...' as test_status;
+SELECT COUNT(*) as recent_test FROM get_recent_keys(1);
 
--- 测试最新密钥
-SELECT * FROM get_recent_keys(10);
-```
-
-## 步骤4：继续前端优化
-
-函数创建成功后，前端代码会自动使用新的分页功能。
+SELECT '✅ All pagination functions created successfully!' as final_status;
