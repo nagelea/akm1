@@ -16,33 +16,77 @@ export default function AdminDashboard({ user }) {
   const fetchStats = async () => {
     try {
       console.log('Refreshing stats...')
-      const { data } = await supabase
-        .from('leaked_keys')
-        .select('id, severity, confidence, status, created_at')
       
-      if (data) {
-        console.log('Raw data for stats:', data.slice(0, 5)) // 显示前5条记录
+      // 使用数据库聚合查询来获取准确统计，避免行数限制
+      const [totalCountResult, todayCountResult, severityResult, statusResult] = await Promise.all([
+        // 总数统计
+        supabase.from('leaked_keys').select('id', { count: 'exact', head: true }),
         
-        const today = new Date().toDateString()
-        const validKeys = data.filter(k => k.status === 'valid')
-        const stats = {
-          total: data.length,
-          today: data.filter(k => new Date(k.created_at).toDateString() === today).length,
-          high_severity: data.filter(k => k.severity === 'high').length,
-          verified: validKeys.length
-        }
+        // 今日新增统计
+        supabase.from('leaked_keys')
+          .select('id', { count: 'exact', head: true })
+          .gte('created_at', new Date().toISOString().split('T')[0]),
         
-        console.log('Valid keys found:', validKeys)
-        console.log('Status distribution:', {
-          valid: data.filter(k => k.status === 'valid').length,
-          invalid: data.filter(k => k.status === 'invalid').length,
-          unknown: data.filter(k => k.status === 'unknown').length
-        })
-        console.log('New stats:', stats)
-        setStats(stats)
+        // 严重程度统计
+        supabase.from('leaked_keys')
+          .select('id', { count: 'exact', head: true })
+          .eq('severity', 'high'),
+        
+        // 验证状态统计
+        supabase.from('leaked_keys')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'valid')
+      ])
+
+      const stats = {
+        total: totalCountResult.count || 0,
+        today: todayCountResult.count || 0,
+        high_severity: severityResult.count || 0,
+        verified: statusResult.count || 0
       }
+      
+      console.log('Stats computed using aggregation:', stats)
+      
+      // 获取状态分布详情用于调试
+      const [unknownResult, invalidResult] = await Promise.all([
+        supabase.from('leaked_keys').select('id', { count: 'exact', head: true }).eq('status', 'unknown'),
+        supabase.from('leaked_keys').select('id', { count: 'exact', head: true }).eq('status', 'invalid')
+      ])
+      
+      console.log('Detailed status distribution:', {
+        valid: stats.verified,
+        invalid: invalidResult.count || 0,
+        unknown: unknownResult.count || 0,
+        total: stats.total
+      })
+      
+      setStats(stats)
     } catch (error) {
       console.error('Failed to fetch stats:', error)
+      
+      // 降级到原来的方法，但显式请求更多数据
+      try {
+        console.log('Falling back to row-based counting with higher limit...')
+        const { data } = await supabase
+          .from('leaked_keys')
+          .select('id, severity, confidence, status, created_at')
+          .limit(50000) // 显式设置更高的限制
+        
+        if (data) {
+          const today = new Date().toDateString()
+          const stats = {
+            total: data.length,
+            today: data.filter(k => new Date(k.created_at).toDateString() === today).length,
+            high_severity: data.filter(k => k.severity === 'high').length,
+            verified: data.filter(k => k.status === 'valid').length
+          }
+          
+          console.log('Fallback stats (may be incomplete if >50000 records):', stats)
+          setStats(stats)
+        }
+      } catch (fallbackError) {
+        console.error('Fallback method also failed:', fallbackError)
+      }
     }
   }
 

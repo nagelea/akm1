@@ -17,13 +17,19 @@ export async function GET() {
     const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000)
     const twoWeeksAgo = new Date(today.getTime() - 14 * 24 * 60 * 60 * 1000)
 
-    // 获取所有密钥数据
+    // 获取所有密钥数据 - 使用更高的限制避免默认1000行限制
     const { data: allKeys, error } = await supabase
       .from('leaked_keys')
       .select('created_at, severity')
+      .limit(100000) // 设置足够高的限制
 
     if (error) {
       throw new Error('获取密钥数据失败: ' + error.message)
+    }
+
+    // 如果接近限制，发出警告
+    if (allKeys && allKeys.length >= 100000) {
+      console.warn('⚠️ Stats-trends query hit limit! May be incomplete data. Total retrieved:', allKeys.length)
     }
 
     // 按时间分组统计
