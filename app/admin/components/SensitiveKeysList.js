@@ -22,6 +22,11 @@ export default function SensitiveKeysList({ user, onStatsChange }) {
     confidence: 'all',
     status: 'all'
   })
+  
+  // 分页状态
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
+  const [paginatedKeys, setPaginatedKeys] = useState([])
 
   useEffect(() => {
     fetchKeys()
@@ -30,6 +35,19 @@ export default function SensitiveKeysList({ user, onStatsChange }) {
   useEffect(() => {
     applyFilters()
   }, [keys, filters, searchQuery])
+
+  useEffect(() => {
+    // 应用分页
+    const startIndex = (currentPage - 1) * pageSize
+    const endIndex = startIndex + pageSize
+    setPaginatedKeys(filteredKeys.slice(startIndex, endIndex))
+  }, [filteredKeys, currentPage, pageSize])
+
+  // 计算分页信息
+  const totalPages = Math.ceil(filteredKeys.length / pageSize)
+  const totalRecords = filteredKeys.length
+  const startRecord = totalRecords > 0 ? (currentPage - 1) * pageSize + 1 : 0
+  const endRecord = Math.min(currentPage * pageSize, totalRecords)
 
   const applyFilters = () => {
     if (!keys || keys.length === 0) {
@@ -93,6 +111,29 @@ export default function SensitiveKeysList({ user, onStatsChange }) {
 
   const handleFilterChange = (newFilters) => {
     setFilters(newFilters)
+    setCurrentPage(1) // 重置到第一页
+  }
+
+  // 分页控制函数
+  const handlePageChange = (page) => {
+    setCurrentPage(page)
+  }
+
+  const handlePageSizeChange = (newPageSize) => {
+    setPageSize(newPageSize)
+    setCurrentPage(1) // 重置到第一页
+  }
+
+  const handlePrevPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1)
+    }
+  }
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1)
+    }
   }
 
   const fetchKeys = async () => {
@@ -377,7 +418,10 @@ export default function SensitiveKeysList({ user, onStatsChange }) {
               type="text"
               id="search"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value)
+                setCurrentPage(1) // 搜索时重置到第一页
+              }}
               placeholder="搜索仓库名、文件路径、代码上下文、密钥内容..."
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
@@ -400,7 +444,7 @@ export default function SensitiveKeysList({ user, onStatsChange }) {
 
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-medium text-gray-900">
-          发现的API密钥 ({filteredKeys.length} / {keys.length} 条记录)
+          发现的API密钥 (显示 {startRecord}-{endRecord} / 共 {totalRecords} 条记录)
         </h3>
         <button
           onClick={fetchKeys}
@@ -412,7 +456,7 @@ export default function SensitiveKeysList({ user, onStatsChange }) {
 
       {/* 密钥列表 - 显示筛选后的结果 */}
       <div className="space-y-4">
-        {filteredKeys.length === 0 && keys.length > 0 ? (
+        {totalRecords === 0 && keys.length > 0 ? (
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
             <div className="text-yellow-600 text-4xl mb-4">🔍</div>
             <h3 className="text-lg font-medium text-yellow-800 mb-2">无匹配结果</h3>
@@ -432,7 +476,7 @@ export default function SensitiveKeysList({ user, onStatsChange }) {
             )}
           </div>
         ) : (
-          filteredKeys.map((key) => (
+          paginatedKeys.map((key) => (
           <div key={key.id} className="bg-white border rounded-lg p-6 shadow-sm">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* 基本信息 */}
@@ -584,6 +628,115 @@ export default function SensitiveKeysList({ user, onStatsChange }) {
           ))
         )}
       </div>
+
+      {/* 分页控件 */}
+      {totalRecords > 0 && (
+        <div className="bg-white border rounded-lg p-4 mt-6">
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+            {/* 分页信息和每页大小选择 */}
+            <div className="flex items-center gap-4">
+              <span className="text-sm text-gray-700">
+                显示 {startRecord}-{endRecord} / 共 {totalRecords} 条
+              </span>
+              <div className="flex items-center gap-2">
+                <label htmlFor="pageSize" className="text-sm text-gray-700">每页:</label>
+                <select
+                  id="pageSize"
+                  value={pageSize}
+                  onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+                  className="border border-gray-300 rounded px-2 py-1 text-sm"
+                >
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+              </div>
+            </div>
+
+            {/* 分页按钮 */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handlePrevPage}
+                disabled={currentPage === 1}
+                className="px-3 py-1 border border-gray-300 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+              >
+                上一页
+              </button>
+              
+              {/* 页码按钮 */}
+              <div className="flex items-center gap-1">
+                {(() => {
+                  const pages = []
+                  const maxVisiblePages = 5
+                  let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2))
+                  let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1)
+                  
+                  if (endPage - startPage + 1 < maxVisiblePages) {
+                    startPage = Math.max(1, endPage - maxVisiblePages + 1)
+                  }
+
+                  if (startPage > 1) {
+                    pages.push(
+                      <button
+                        key={1}
+                        onClick={() => handlePageChange(1)}
+                        className="px-3 py-1 border border-gray-300 rounded text-sm hover:bg-gray-50"
+                      >
+                        1
+                      </button>
+                    )
+                    if (startPage > 2) {
+                      pages.push(<span key="start-ellipsis" className="px-2 text-gray-500">...</span>)
+                    }
+                  }
+
+                  for (let i = startPage; i <= endPage; i++) {
+                    pages.push(
+                      <button
+                        key={i}
+                        onClick={() => handlePageChange(i)}
+                        className={`px-3 py-1 border rounded text-sm ${
+                          i === currentPage
+                            ? 'bg-blue-600 text-white border-blue-600'
+                            : 'border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        {i}
+                      </button>
+                    )
+                  }
+
+                  if (endPage < totalPages) {
+                    if (endPage < totalPages - 1) {
+                      pages.push(<span key="end-ellipsis" className="px-2 text-gray-500">...</span>)
+                    }
+                    pages.push(
+                      <button
+                        key={totalPages}
+                        onClick={() => handlePageChange(totalPages)}
+                        className="px-3 py-1 border border-gray-300 rounded text-sm hover:bg-gray-50"
+                      >
+                        {totalPages}
+                      </button>
+                    )
+                  }
+
+                  return pages
+                })()}
+              </div>
+
+              <button
+                onClick={handleNextPage}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1 border border-gray-300 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+              >
+                下一页
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 完整密钥显示模态框 */}
       {showFullKey && (
