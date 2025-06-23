@@ -32,10 +32,17 @@ const KEY_PATTERNS = {
     name: 'OpenAI Service Account',
     confidence: 'high'
   },
+  deepseek: {
+    pattern: /sk-[a-zA-Z0-9]{48}(?![a-zA-Z0-9])|sk-[a-zA-Z0-9]+-[a-zA-Z0-9]+(?![a-zA-Z0-9-])/g,
+    name: 'DeepSeek',
+    confidence: 'high',
+    context_required: ['deepseek']
+  },
   openai: {
-    pattern: /sk-[a-zA-Z0-9]{48}/g,
+    pattern: /sk-[a-zA-Z0-9]{48}(?![a-zA-Z0-9])|sk-[a-zA-Z0-9]+-[a-zA-Z0-9]+(?![a-zA-Z0-9-])/g,
     name: 'OpenAI',
-    confidence: 'high'
+    confidence: 'high',
+    context_exclude: ['deepseek', 'claude', 'anthropic']
   },
   openai_org: {
     pattern: /org-[a-zA-Z0-9]{24}/g,
@@ -61,12 +68,6 @@ const KEY_PATTERNS = {
     pattern: /pplx-[a-zA-Z0-9]{56}/g,
     name: 'Perplexity AI',
     confidence: 'high'
-  },
-  deepseek: {
-    pattern: /sk-[a-zA-Z0-9]{48}/g,
-    name: 'DeepSeek',
-    confidence: 'medium',
-    context_required: ['deepseek']
   },
   google: {
     pattern: /AIza[0-9A-Za-z_-]{35}/g,
@@ -586,15 +587,41 @@ class APIKeyScanner {
         console.log(`🔍 Using ALL patterns for detection (${Object.keys(allPatterns).length} patterns)`);
       }
       
+      // 收集所有找到的密钥及其置信度
+      const foundKeys = [];
+      
       for (const [type, config] of Object.entries(allPatterns)) {
         const matches = fileContent.match(config.pattern);
         if (matches) {
           for (const key of matches) {
-            const processed = await this.processFoundKey(key, type, fileInfo, fileContent);
-            if (processed) {
-              this.foundToday++;
+            // 过滤明显的假密钥
+            if (this.isLikelyFake(key, fileContent)) {
+              continue;
             }
+
+            // 根据置信度进行额外验证
+            if (config.confidence === 'low' && !this.hasValidContext(key, fileContent, type)) {
+              continue;
+            }
+
+            foundKeys.push({
+              key,
+              type,
+              confidence: config.confidence,
+              keyConfig: config
+            });
           }
+        }
+      }
+
+      // 按置信度优化处理
+      const optimizedKeys = this.optimizeKeysByConfidence(foundKeys, fileContent);
+      
+      // 处理优化后的密钥
+      for (const keyInfo of optimizedKeys) {
+        const processed = await this.processFoundKey(keyInfo.key, keyInfo.type, fileInfo, fileContent);
+        if (processed) {
+          this.foundToday++;
         }
       }
     } catch (error) {
@@ -605,27 +632,107 @@ class APIKeyScanner {
     }
   }
 
-  async processFoundKey(key, type, fileInfo, content) {
-    // 获取密钥类型配置 - 根据当前扫描模式决定查找范围
-    let keyConfig;
-    
-    if (this.currentScanType === 'custom') {
-      keyConfig = this.customPatterns[type];
-    } else if (this.currentScanType === 'file_custom') {
-      keyConfig = this.fileBasedPatterns[type];
-    } else {
-      keyConfig = KEY_PATTERNS[type] || this.customPatterns[type] || this.fileBasedPatterns[type];
-    }
-    
-    // 过滤明显的假密钥
-    if (this.isLikelyFake(key, content)) {
-      return false;
-    }
+  optimizeKeysByConfidence(foundKeys, content) {
+    if (foundKeys.length === 0) return [];
 
-    // 根据置信度进行额外验证
-    if (keyConfig.confidence === 'low' && !this.hasValidContext(key, content, type)) {
-      return false; // 低置信度密钥需要额外验证
+    console.log(`🔍 Found ${foundKeys.length} potential keys, optimizing by confidence...`);
+
+    // 按置信度分组
+    const highConfidence = foundKeys.filter(k => k.confidence === 'high');
+    const mediumConfidence = foundKeys.filter(k => k.confidence === 'medium');
+    const lowConfidence = foundKeys.filter(k => k.confidence === 'low');
+
+    // 去重：相同的密钥只保留最高置信度的
+    const keyMap = new Map();
+    
+    // 添加高置信度密钥
+    highConfidence.forEach(keyInfo => {
+      keyMap.set(keyInfo.key, keyInfo);
+    });
+
+    // 添加中等置信度密钥（如果不与高置信度重复）
+    mediumConfidence.forEach(keyInfo => {
+      if (!keyMap.has(keyInfo.key)) {
+        keyMap.set(keyInfo.key, keyInfo);
+      }
+    });
+
+    // 低置信度密钥的特殊处理
+    const hasHighConfidenceKeys = highConfidence.length > 0;
+    
+    lowConfidence.forEach(keyInfo => {
+      if (!keyMap.has(keyInfo.key)) {
+        if (hasHighConfidenceKeys) {
+          // 如果已有高置信度密钥，需要额外验证低置信度密钥
+          console.log(`⚠️ Low confidence key found with high confidence keys present, requires additional validation: ${keyInfo.type}`);
+          
+          // 严格的上下文验证
+          if (this.hasStrictValidContext(keyInfo.key, content, keyInfo.type)) {
+            keyMap.set(keyInfo.key, keyInfo);
+            console.log(`✅ Low confidence key ${keyInfo.type} passed strict validation`);
+          } else {
+            console.log(`❌ Low confidence key ${keyInfo.type} failed strict validation, skipping`);
+          }
+        } else {
+          // 没有高置信度密钥时，保留低置信度密钥
+          keyMap.set(keyInfo.key, keyInfo);
+        }
+      }
+    });
+
+    const result = Array.from(keyMap.values());
+    console.log(`📊 Confidence optimization: ${foundKeys.length} → ${result.length} keys`);
+    
+    // 显示保留的密钥统计
+    const stats = result.reduce((acc, k) => {
+      acc[k.confidence] = (acc[k.confidence] || 0) + 1;
+      return acc;
+    }, {});
+    console.log(`   High: ${stats.high || 0}, Medium: ${stats.medium || 0}, Low: ${stats.low || 0}`);
+
+    return result;
+  }
+
+  hasStrictValidContext(key, content, type) {
+    // 更严格的上下文验证，用于低置信度密钥
+    const keyConfig = this.getKeyConfig(type);
+    const requiredContexts = keyConfig?.context_required || [];
+    const excludeContexts = keyConfig?.context_exclude || [];
+    
+    const keyIndex = content.indexOf(key);
+    const contextStart = Math.max(0, keyIndex - 200); // 更大的上下文范围
+    const contextEnd = Math.min(content.length, keyIndex + key.length + 200);
+    const context = content.substring(contextStart, contextEnd).toLowerCase();
+    
+    // 检查排除上下文
+    if (excludeContexts.length > 0) {
+      const hasExcluded = excludeContexts.some(ctx => context.includes(ctx.toLowerCase()));
+      if (hasExcluded) return false;
     }
+    
+    // 低置信度密钥需要更强的上下文证据
+    if (requiredContexts.length === 0) {
+      // 如果没有明确要求，检查是否在明显的API配置上下文中
+      const apiContexts = ['api_key', 'apikey', 'token', 'secret', 'key=', 'authorization', 'bearer'];
+      return apiContexts.some(ctx => context.includes(ctx.toLowerCase()));
+    }
+    
+    return requiredContexts.some(ctx => context.includes(ctx.toLowerCase()));
+  }
+
+  getKeyConfig(type) {
+    if (this.currentScanType === 'custom') {
+      return this.customPatterns[type];
+    } else if (this.currentScanType === 'file_custom') {
+      return this.fileBasedPatterns[type];
+    } else {
+      return KEY_PATTERNS[type] || this.customPatterns[type] || this.fileBasedPatterns[type];
+    }
+  }
+
+  async processFoundKey(key, type, fileInfo, content) {
+    // 获取密钥类型配置
+    const keyConfig = this.getKeyConfig(type);
 
     const keyHash = crypto.createHash('sha256').update(key).digest('hex');
     
@@ -745,6 +852,13 @@ class APIKeyScanner {
       keyConfig = KEY_PATTERNS[type] || this.customPatterns[type] || this.fileBasedPatterns[type];
     }
     const requiredContexts = keyConfig?.context_required || [];
+    const excludeContexts = keyConfig?.context_exclude || [];
+    
+    // 检查是否包含排除的上下文关键词
+    if (excludeContexts.length > 0) {
+      const hasExcluded = excludeContexts.some(ctx => context.includes(ctx.toLowerCase()));
+      if (hasExcluded) return false;
+    }
     
     // 如果没有上下文要求，直接通过
     if (requiredContexts.length === 0) return true;
