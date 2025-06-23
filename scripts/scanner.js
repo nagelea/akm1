@@ -299,6 +299,7 @@ class APIKeyScanner {
         `"${customPattern}" language:python NOT is:fork`,
         `"${customPattern}" language:javascript NOT is:fork`,
         `"${customPattern}" language:typescript NOT is:fork`,
+        `"${customPattern}" language:"Jupyter Notebook" NOT is:fork`,
         `"${customPattern}" language:go NOT is:fork`,
         `"${customPattern}" language:java NOT is:fork`,
         `"${customPattern}" NOT is:fork`, // 通用搜索
@@ -325,6 +326,7 @@ class APIKeyScanner {
           queries.push(`"${searchPattern}" language:python NOT is:fork`);
           queries.push(`"${searchPattern}" language:javascript NOT is:fork`);
           queries.push(`"${searchPattern}" language:typescript NOT is:fork`);
+          queries.push(`"${searchPattern}" language:"Jupyter Notebook" NOT is:fork`);
           queries.push(`"${searchPattern}" NOT is:fork`);
         });
       });
@@ -339,34 +341,45 @@ class APIKeyScanner {
         // OpenAI系列
         `"sk-" language:python NOT is:fork`,
         `"sk-" language:javascript NOT is:fork`,
+        `"sk-" language:"Jupyter Notebook" NOT is:fork`,
         `"sk-proj-" language:python NOT is:fork`,   // OpenAI Project keys
         `"sk-proj-" language:javascript NOT is:fork`,
+        `"sk-proj-" language:"Jupyter Notebook" NOT is:fork`,
         `"sk-user-" language:python NOT is:fork`,   // OpenAI User keys
         `"sk-user-" language:javascript NOT is:fork`,
+        `"sk-user-" language:"Jupyter Notebook" NOT is:fork`,
         `"sk-svcacct-" language:python NOT is:fork`, // OpenAI Service Account keys
         `"sk-svcacct-" language:javascript NOT is:fork`,
+        `"sk-svcacct-" language:"Jupyter Notebook" NOT is:fork`,
         // 新增AI服务 - 更精确的搜索
         `"sk-or-" language:python NOT is:fork`,     // OpenRouter (更广泛)
+        `"sk-or-" language:"Jupyter Notebook" NOT is:fork`,
         `"sk-or-v1-" language:python NOT is:fork`,  // OpenRouter (原有)
         `"pplx-" language:python NOT is:fork`,      // Perplexity
         `"gsk_" language:python NOT is:fork`,       // Groq
+        `"gsk_" language:"Jupyter Notebook" NOT is:fork`,
         `"fw_" language:python NOT is:fork`,        // Fireworks
         `"pa-" language:python NOT is:fork`,        // Voyage AI
         `"esecret_" language:python NOT is:fork`,   // Anyscale
         // Google系列 - 精确搜索
         `"AIza" language:python NOT is:fork`,
+        `"AIza" language:"Jupyter Notebook" NOT is:fork`,
         `"AIzaSy" language:python NOT is:fork`,     // Google精确格式
         // FAL.AI搜索
         `"FAL_KEY" language:python NOT is:fork`,
         `"fal.ai" language:python NOT is:fork`,
         // HuggingFace & Replicate
         `"hf_" language:python NOT is:fork`,
+        `"hf_" language:"Jupyter Notebook" NOT is:fork`,
         `"r8_" language:python NOT is:fork`,
         // API Key变量名搜索
         `openai_api_key language:python`,
+        `openai_api_key language:"Jupyter Notebook"`,
         `anthropic_api_key language:python`,
+        `anthropic_api_key language:"Jupyter Notebook"`,
         `openrouter_api_key language:python`,
         `groq_api_key language:python`,
+        `groq_api_key language:"Jupyter Notebook"`,
         // 最近推送的仓库
         `"sk-" pushed:>${yesterday} NOT is:fork`,
         `"sk-proj-" pushed:>${yesterday} NOT is:fork`,
@@ -380,12 +393,16 @@ class APIKeyScanner {
         // OpenAI系列
         `"sk-" language:python NOT is:fork`,
         `"sk-" language:javascript NOT is:fork`,
+        `"sk-" language:"Jupyter Notebook" NOT is:fork`,
         `"sk-proj-" language:python NOT is:fork`,   // OpenAI Project keys
         `"sk-proj-" language:javascript NOT is:fork`,
+        `"sk-proj-" language:"Jupyter Notebook" NOT is:fork`,
         `"sk-user-" language:python NOT is:fork`,   // OpenAI User keys
         `"sk-user-" language:javascript NOT is:fork`,
+        `"sk-user-" language:"Jupyter Notebook" NOT is:fork`,
         `"sk-svcacct-" language:python NOT is:fork`, // OpenAI Service Account keys
         `"sk-svcacct-" language:javascript NOT is:fork`,
+        `"sk-svcacct-" language:"Jupyter Notebook" NOT is:fork`,
         // 新增AI服务特征搜索 - 精确模式
         `"sk-or-" NOT is:fork`,                 // OpenRouter (更广泛)
         `"sk-or-v1" NOT is:fork`,               // OpenRouter (原有)
@@ -418,14 +435,20 @@ class APIKeyScanner {
         // 文件扩展名搜索
         `sk- extension:py NOT is:fork`,
         `sk- extension:js NOT is:fork`,
+        `sk- extension:ipynb NOT is:fork`,
         `sk-proj- extension:py NOT is:fork`,
         `sk-proj- extension:js NOT is:fork`,
+        `sk-proj- extension:ipynb NOT is:fork`,
         `sk-user- extension:py NOT is:fork`,
         `sk-user- extension:js NOT is:fork`,
+        `sk-user- extension:ipynb NOT is:fork`,
         `sk-svcacct- extension:py NOT is:fork`,
         `sk-svcacct- extension:js NOT is:fork`,
+        `sk-svcacct- extension:ipynb NOT is:fork`,
         `AIza extension:py NOT is:fork`,
+        `AIza extension:ipynb NOT is:fork`,
         `hf_ extension:py NOT is:fork`,
+        `hf_ extension:ipynb NOT is:fork`,
         // 配置文件搜索
         `"sk-" filename:.env`,
         `"sk-proj-" filename:.env`,
@@ -539,7 +562,12 @@ class APIKeyScanner {
         return;
       }
 
-      const fileContent = Buffer.from(content.data.content, 'base64').toString();
+      let fileContent = Buffer.from(content.data.content, 'base64').toString();
+      
+      // Jupyter Notebook 特殊处理
+      if (fileInfo.path.endsWith('.ipynb')) {
+        fileContent = this.extractNotebookContent(fileContent, fileInfo.path);
+      }
       
       // 检测各种API密钥 - 根据扫描模式选择使用的模式
       let allPatterns;
@@ -1036,6 +1064,52 @@ class APIKeyScanner {
     const start = Math.max(0, keyIndex - 100);
     const end = Math.min(content.length, keyIndex + key.length + 100);
     return content.substring(start, end);
+  }
+
+  extractNotebookContent(content, path) {
+    try {
+      const notebook = JSON.parse(content);
+      let extractedContent = [];
+      
+      // 提取所有 cell 的内容
+      if (notebook.cells && Array.isArray(notebook.cells)) {
+        for (const cell of notebook.cells) {
+          if (cell.source && Array.isArray(cell.source)) {
+            // source 是字符串数组，连接成完整内容
+            const cellContent = cell.source.join('');
+            if (cellContent.trim()) {
+              extractedContent.push(cellContent);
+            }
+          } else if (typeof cell.source === 'string') {
+            // 有些情况下 source 是字符串
+            if (cell.source.trim()) {
+              extractedContent.push(cell.source);
+            }
+          }
+          
+          // 也检查 outputs 中的内容（执行结果可能包含API密钥）
+          if (cell.outputs && Array.isArray(cell.outputs)) {
+            for (const output of cell.outputs) {
+              if (output.text && Array.isArray(output.text)) {
+                const outputText = output.text.join('');
+                if (outputText.trim()) {
+                  extractedContent.push(outputText);
+                }
+              }
+            }
+          }
+        }
+      }
+      
+      const result = extractedContent.join('\n');
+      console.log(`📓 Jupyter Notebook processed: ${path} (${extractedContent.length} cells)`);
+      return result;
+      
+    } catch (error) {
+      console.log(`⚠️  Failed to parse Jupyter Notebook: ${path} - ${error.message}`);
+      // 如果解析失败，返回原始内容
+      return content;
+    }
   }
 
   sleep(ms) {
