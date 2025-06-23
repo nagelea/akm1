@@ -10,6 +10,11 @@ const KEY_PATTERNS = {
     name: 'Anthropic Claude',
     confidence: 'high'
   },
+  anthropic_precise: {
+    pattern: /sk-ant-api03-[\w\-]{93}AA/g,
+    name: 'Anthropic Claude (Precise)',
+    confidence: 'high'
+  },
   openai_project: {
     pattern: /sk-proj-[a-zA-Z0-9_-]{64,}/g,
     name: 'OpenAI Project',
@@ -36,7 +41,7 @@ const KEY_PATTERNS = {
     confidence: 'high'
   },
   openrouter: {
-    pattern: /sk-or-v1-[a-zA-Z0-9]{64}/g,
+    pattern: /sk-or-[a-zA-Z0-9-]{32,68}/g,
     name: 'OpenRouter',
     confidence: 'high'
   },
@@ -66,6 +71,11 @@ const KEY_PATTERNS = {
     name: 'Google AI',
     confidence: 'high'
   },
+  google_precise: {
+    pattern: /AIzaSy[a-zA-Z0-9_-]{33}/g,
+    name: 'Google AI (Precise)',
+    confidence: 'high'
+  },
   palm: {
     pattern: /AIza[0-9A-Za-z_-]{35}/g,
     name: 'Google PaLM',
@@ -79,6 +89,11 @@ const KEY_PATTERNS = {
   fireworks: {
     pattern: /fw_[a-zA-Z0-9]{32,48}/g,
     name: 'Fireworks AI',
+    confidence: 'high'
+  },
+  fal_ai: {
+    pattern: /([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}):([a-f0-9]{32})/g,
+    name: 'FAL.AI',
     confidence: 'high'
   },
   groq: {
@@ -197,15 +212,20 @@ class APIKeyScanner {
         `"sk-user-" language:javascript NOT is:fork`,
         `"sk-svcacct-" language:python NOT is:fork`, // OpenAI Service Account keys
         `"sk-svcacct-" language:javascript NOT is:fork`,
-        // 新增AI服务
-        `"sk-or-v1-" language:python NOT is:fork`,  // OpenRouter
+        // 新增AI服务 - 更精确的搜索
+        `"sk-or-" language:python NOT is:fork`,     // OpenRouter (更广泛)
+        `"sk-or-v1-" language:python NOT is:fork`,  // OpenRouter (原有)
         `"pplx-" language:python NOT is:fork`,      // Perplexity
         `"gsk_" language:python NOT is:fork`,       // Groq
         `"fw_" language:python NOT is:fork`,        // Fireworks
         `"pa-" language:python NOT is:fork`,        // Voyage AI
         `"esecret_" language:python NOT is:fork`,   // Anyscale
-        // Google系列
+        // Google系列 - 精确搜索
         `"AIza" language:python NOT is:fork`,
+        `"AIzaSy" language:python NOT is:fork`,     // Google精确格式
+        // FAL.AI搜索
+        `"FAL_KEY" language:python NOT is:fork`,
+        `"fal.ai" language:python NOT is:fork`,
         // HuggingFace & Replicate
         `"hf_" language:python NOT is:fork`,
         `"r8_" language:python NOT is:fork`,
@@ -233,15 +253,22 @@ class APIKeyScanner {
         `"sk-user-" language:javascript NOT is:fork`,
         `"sk-svcacct-" language:python NOT is:fork`, // OpenAI Service Account keys
         `"sk-svcacct-" language:javascript NOT is:fork`,
-        // 新增AI服务特征搜索
-        `"sk-or-v1" NOT is:fork`,               // OpenRouter
+        // 新增AI服务特征搜索 - 精确模式
+        `"sk-or-" NOT is:fork`,                 // OpenRouter (更广泛)
+        `"sk-or-v1" NOT is:fork`,               // OpenRouter (原有)
         `"pplx-" NOT is:fork`,                  // Perplexity
         `"gsk_" NOT is:fork`,                   // Groq
         `"fw_" NOT is:fork`,                    // Fireworks
         `"esecret_" NOT is:fork`,               // Anyscale
         `"pa-" NOT is:fork`,                    // Voyage AI
-        // Google系列
-        `"AIza" language:python NOT is:fork`,  
+        // Google系列 - 精确搜索
+        `"AIza" language:python NOT is:fork`,
+        `"AIzaSy" NOT is:fork`,                 // Google精确格式
+        // FAL.AI搜索
+        `"FAL_KEY" NOT is:fork`,
+        `"fal.ai" NOT is:fork`,
+        // Anthropic精确搜索
+        `"sk-ant-api03" NOT is:fork`,  
         // HuggingFace & Replicate
         `"hf_" language:python NOT is:fork`,
         `"r8_" language:python NOT is:fork`,

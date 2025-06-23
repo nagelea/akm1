@@ -33,8 +33,28 @@ const KEY_PATTERNS = {
     confidence: 'high'
   },
   anthropic: {
-    pattern: /sk-ant-api03-[a-zA-Z0-9_-]{95}/g,
+    pattern: /sk-ant-api\d+-[a-zA-Z0-9_-]+/g,
     name: 'Anthropic Claude',
+    confidence: 'high'
+  },
+  anthropic_precise: {
+    pattern: /sk-ant-api03-[\w\-]{93}AA/g,
+    name: 'Anthropic Claude (Precise)',
+    confidence: 'high'
+  },
+  openrouter: {
+    pattern: /sk-or-[a-zA-Z0-9-]{32,68}/g,
+    name: 'OpenRouter',
+    confidence: 'high'
+  },
+  google_precise: {
+    pattern: /AIzaSy[a-zA-Z0-9_-]{33}/g,
+    name: 'Google AI (Precise)',
+    confidence: 'high'
+  },
+  fal_ai: {
+    pattern: /([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}):([a-f0-9]{32})/g,
+    name: 'FAL.AI',
     confidence: 'high'
   },
   google: {
