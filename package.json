@@ -8,7 +8,11 @@
     "build": "next build",
     "start": "next start",
     "scan": "node scripts/scanner.js",
-    "db:migrate": "node scripts/setup-db.js"
+    "db:migrate": "node scripts/setup-db.js",
+    "db:paginate": "node scripts/setup-paginated-rpc.js",
+    "clean:incomplete": "node scripts/cleanup-incomplete-keys.js",
+    "sql:cleanup": "node scripts/run-sql-cleanup.js",
+    "fix:incomplete": "node scripts/fix-incomplete-keys.js"
   },
   "keywords": [
     "security",

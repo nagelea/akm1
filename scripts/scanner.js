@@ -664,12 +664,19 @@ class APIKeyScanner {
 
     if (!error && keyRecord) {
       // 直接保存完整密钥（无加密）
-      await this.supabase.from('leaked_keys_sensitive').insert({
+      const { error: sensitiveError } = await this.supabase.from('leaked_keys_sensitive').insert({
         key_id: keyRecord.id,
         full_key: key,
         raw_context: rawContext,
         github_url: githubUrl
       });
+
+      if (sensitiveError) {
+        console.error('Failed to save sensitive data:', sensitiveError);
+        // 如果敏感数据保存失败，删除主记录避免孤立数据
+        await this.supabase.from('leaked_keys').delete().eq('id', keyRecord.id);
+        return false;
+      }
 
       // 自动验证新发现的密钥
       await this.autoVerifyKey(keyRecord.id, type, key);
