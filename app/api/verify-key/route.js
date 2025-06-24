@@ -412,6 +412,7 @@ export async function POST(request) {
         isValid = await verifyTogether(key)
         break
       case 'google':
+      case 'google_api':
       case 'google_service':
       case 'palm':
       case 'gemini':
