@@ -171,6 +171,24 @@ const KEY_PATTERNS = {
 };
 
 // 加载自定义模式配置
+// 将模式名称转换为类型键
+function getTypeKeyFromName(name) {
+  const mapping = {
+    'OpenRouter API Keys': 'openrouter',
+    'Stripe API Keys': 'stripe',
+    'SendGrid API Keys': 'sendgrid',
+    'Slack Bot Tokens': 'slack',
+    'GitHub Personal Access Tokens': 'github_pat',
+    'JWT Tokens': 'jwt',
+    'Discord Bot Tokens': 'discord',
+    'Twilio API Keys': 'twilio',
+    'AWS Access Keys': 'aws',
+    'Custom API Keys': 'custom_api'
+  };
+  
+  return mapping[name] || name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+}
+
 function loadCustomPatterns() {
   try {
     const configPath = path.join(__dirname, '..', 'custom-patterns.json');
@@ -188,13 +206,15 @@ function loadCustomPatterns() {
         if (pattern.enabled) {
           try {
             const regexPattern = new RegExp(pattern.regex_pattern, 'g');
-            customPatterns[`custom_${index}`] = {
+            // 使用友好的类型名称而不是 custom_${index}
+            const typeKey = getTypeKeyFromName(pattern.name);
+            customPatterns[typeKey] = {
               pattern: regexPattern,
               name: pattern.name,
               confidence: pattern.confidence || 'medium',
               search_patterns: pattern.search_patterns || []
             };
-            console.log(`✅ Loaded custom pattern: ${pattern.name}`);
+            console.log(`✅ Loaded custom pattern: ${pattern.name} as ${typeKey}`);
           } catch (error) {
             console.error(`❌ Invalid regex in pattern "${pattern.name}": ${error.message}`);
           }
