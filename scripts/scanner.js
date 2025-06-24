@@ -151,10 +151,13 @@ const KEY_PATTERNS = {
   },
   // 低特异性模式（最后检测，避免误匹配）
   azure_openai: {
-    pattern: /[a-zA-Z0-9]{32}/g,
+    pattern: /[a-f0-9]{32}(?![a-f0-9])/g, // 更严格：只匹配32位十六进制
     name: 'Azure OpenAI',
     confidence: 'low',
-    context_required: ['azure', 'openai']
+    context_required: ['azure', 'openai'],
+    context_exclude: ['github', 'git', 'commit', 'hash', 'sha', 'md5', 'token', 'uuid', 'id'], // 排除常见的哈希值
+    min_context_matches: 2, // 需要至少2个上下文关键词
+    strict_validation: true // 启用严格验证
   },
   mistral: {
     pattern: /[a-zA-Z0-9]{32}/g,
@@ -855,6 +858,50 @@ class APIKeyScanner {
     return fakeIndicators.some(indicator => context.includes(indicator));
   }
 
+  // 检查是否看起来像哈希值而不是API密钥
+  looksLikeHash(key, context) {
+    // 检查上下文中是否包含哈希相关关键词
+    const hashIndicators = [
+      'commit', 'hash', 'sha', 'md5', 'checksum', 'digest',
+      'git', 'github', 'gitlab', 'repository', 'version',
+      'uuid', 'guid', 'id', 'identifier', 'token_id'
+    ];
+    
+    return hashIndicators.some(indicator => context.includes(indicator));
+  }
+  
+  // 检查密钥是否在代码注释中
+  isInComment(key, content, keyIndex) {
+    const lines = content.split('\n');
+    let currentPos = 0;
+    
+    for (const line of lines) {
+      if (currentPos <= keyIndex && keyIndex < currentPos + line.length) {
+        const trimmedLine = line.trim();
+        // 检查是否在单行注释中
+        if (trimmedLine.startsWith('//') || trimmedLine.startsWith('#') || 
+            trimmedLine.startsWith('<!--') || trimmedLine.includes('* ')) {
+          return true;
+        }
+        break;
+      }
+      currentPos += line.length + 1; // +1 for newline
+    }
+    
+    // 检查是否在多行注释中
+    const beforeKey = content.substring(0, keyIndex);
+    const afterKey = content.substring(keyIndex);
+    
+    // 检查/* */ 注释
+    const lastCommentStart = beforeKey.lastIndexOf('/*');
+    const lastCommentEnd = beforeKey.lastIndexOf('*/');
+    if (lastCommentStart > lastCommentEnd && afterKey.includes('*/')) {
+      return true;
+    }
+    
+    return false;
+  }
+
   hasValidContext(key, content, type) {
     const keyIndex = content.indexOf(key);
     const contextStart = Math.max(0, keyIndex - 200);
@@ -873,6 +920,21 @@ class APIKeyScanner {
     }
     const requiredContexts = keyConfig?.context_required || [];
     const excludeContexts = keyConfig?.context_exclude || [];
+    const minContextMatches = keyConfig?.min_context_matches || 1;
+    const strictValidation = keyConfig?.strict_validation || false;
+    
+    // 严格验证模式下的额外检查
+    if (strictValidation) {
+      // 检查是否看起来像哈希值、UUID等非密钥格式
+      if (this.looksLikeHash(key, context)) {
+        return false;
+      }
+      
+      // 检查是否在代码注释中
+      if (this.isInComment(key, content, keyIndex)) {
+        return false;
+      }
+    }
     
     // 检查是否包含排除的上下文关键词
     if (excludeContexts.length > 0) {
@@ -883,8 +945,9 @@ class APIKeyScanner {
     // 如果没有上下文要求，直接通过
     if (requiredContexts.length === 0) return true;
     
-    // 检查是否包含必需的上下文关键词
-    return requiredContexts.some(ctx => context.includes(ctx.toLowerCase()));
+    // 检查是否包含足够数量的必需上下文关键词
+    const matchingContexts = requiredContexts.filter(ctx => context.includes(ctx.toLowerCase()));
+    return matchingContexts.length >= minContextMatches;
   }
 
   async autoVerifyKey(keyId, keyType, fullKey) {
