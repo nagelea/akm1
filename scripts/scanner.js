@@ -32,17 +32,17 @@ const KEY_PATTERNS = {
     name: 'OpenAI Service Account',
     confidence: 'high'
   },
-  deepseek: {
-    pattern: /sk-[a-zA-Z0-9]{43,53}(?![a-zA-Z0-9])/g,
-    name: 'DeepSeek',
-    confidence: 'high',
-    context_required: ['deepseek']
-  },
   openai: {
     pattern: /sk-[a-zA-Z0-9]{48}(?![a-zA-Z0-9])|sk-(?:proj|user|svcacct)-[a-zA-Z0-9]{40,}(?![a-zA-Z0-9])/g,
     name: 'OpenAI',
     confidence: 'high',
     context_exclude: ['deepseek', 'claude', 'anthropic']
+  },
+  deepseek: {
+    pattern: /sk-[a-zA-Z0-9]{48}(?![a-zA-Z0-9])/g,
+    name: 'DeepSeek',
+    confidence: 'high',
+    context_required: ['deepseek']
   },
   openai_org: {
     pattern: /org-[a-zA-Z0-9]{24}/g,
@@ -624,8 +624,9 @@ class APIKeyScanner {
               continue;
             }
 
-            // 根据置信度进行额外验证
-            if (config.confidence === 'low' && !this.hasValidContext(key, fileContent, type)) {
+            // 对所有密钥进行上下文验证
+            if (!this.hasValidContext(key, fileContent, type)) {
+              console.log(`❌ 密钥 ${this.maskKey(key)} 未通过上下文验证 (${type})`);
               continue;
             }
 
