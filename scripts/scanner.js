@@ -18,28 +18,28 @@ const KEY_PATTERNS = {
     confidence: 'high'
   },
   openai_project: {
-    pattern: /sk-proj-[a-zA-Z0-9_-]{64,}/g,
+    pattern: /sk-proj-[a-zA-Z0-9]{40,}(?![a-zA-Z0-9])/g,
     name: 'OpenAI Project',
     confidence: 'high'
   },
   openai_user: {
-    pattern: /sk-user-[a-zA-Z0-9_-]{64,}/g,
+    pattern: /sk-user-[a-zA-Z0-9]{40,}(?![a-zA-Z0-9])/g,
     name: 'OpenAI User',
     confidence: 'high'
   },
   openai_service: {
-    pattern: /sk-svcacct-[a-zA-Z0-9_-]{64,}/g,
+    pattern: /sk-svcacct-[a-zA-Z0-9]{40,}(?![a-zA-Z0-9])/g,
     name: 'OpenAI Service Account',
     confidence: 'high'
   },
   deepseek: {
-    pattern: /sk-[a-zA-Z0-9]{48}(?![a-zA-Z0-9])|sk-[a-zA-Z0-9]+-[a-zA-Z0-9]+(?![a-zA-Z0-9-])/g,
+    pattern: /sk-[a-zA-Z0-9]{43,53}(?![a-zA-Z0-9])/g,
     name: 'DeepSeek',
     confidence: 'high',
     context_required: ['deepseek']
   },
   openai: {
-    pattern: /sk-[a-zA-Z0-9]{48}(?![a-zA-Z0-9])|sk-[a-zA-Z0-9]+-[a-zA-Z0-9]+(?![a-zA-Z0-9-])/g,
+    pattern: /sk-[a-zA-Z0-9]{48}(?![a-zA-Z0-9])|sk-(?:proj|user|svcacct)-[a-zA-Z0-9]{40,}(?![a-zA-Z0-9])/g,
     name: 'OpenAI',
     confidence: 'high',
     context_exclude: ['deepseek', 'claude', 'anthropic']
@@ -65,7 +65,7 @@ const KEY_PATTERNS = {
     confidence: 'high'
   },
   perplexity: {
-    pattern: /pplx-[a-zA-Z0-9]{56}/g,
+    pattern: /pplx-[a-zA-Z0-9]{40,60}/g,
     name: 'Perplexity AI',
     confidence: 'high'
   },
@@ -1162,6 +1162,10 @@ class APIKeyScanner {
   }
 
   async verifyPerplexity(key) {
+    if (!key || key.trim() === '') {
+      return { isValid: false, details: 'Empty API key' };
+    }
+
     try {
       const response = await fetch('https://api.perplexity.ai/chat/completions', {
         method: 'POST',
@@ -1175,9 +1179,21 @@ class APIKeyScanner {
           max_tokens: 1
         })
       });
-      return { isValid: response.status !== 401 && response.status !== 403 };
-    } catch {
-      return { isValid: false };
+      
+      if (response.ok) {
+        return { isValid: true, details: 'Valid Perplexity API key' };
+      } else if (response.status === 401) {
+        return { isValid: false, details: 'Invalid or expired API key' };
+      } else if (response.status === 403) {
+        return { isValid: false, details: 'API key lacks necessary permissions' };
+      } else if (response.status === 429) {
+        return { isValid: true, details: 'Rate limited but key appears valid' };
+      } else {
+        const errorData = await response.json().catch(() => null);
+        return { isValid: false, details: `API returned status ${response.status}` };
+      }
+    } catch (error) {
+      return { isValid: false, details: `Network error: ${error.message}` };
     }
   }
 
