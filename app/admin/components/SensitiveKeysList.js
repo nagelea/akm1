@@ -124,10 +124,14 @@ export default function SensitiveKeysList({ user, onStatsChange }) {
           })
           
           setKeys(keysWithSensitive)
+          setTotalRecords(keysWithSensitive.length)
           console.log('使用手动合并方法加载:', keysWithSensitive.length, '条记录')
         } else {
-          setKeys(fallbackData || [])
-          console.log('使用备用RPC方法加载:', fallbackData?.length || 0, '条记录')
+          const fallbackKeys = fallbackData || []
+          setKeys(fallbackKeys)
+          // 备用方案没有分页，所以总数就是当前数据长度
+          setTotalRecords(fallbackKeys.length)
+          console.log('使用备用RPC方法加载:', fallbackKeys.length, '条记录')
         }
       } else {
         // 成功使用新的分页函数
@@ -146,6 +150,7 @@ export default function SensitiveKeysList({ user, onStatsChange }) {
             first_seen: row.first_seen,
             last_verified: row.last_verified,
             context_preview: row.context_preview,
+            total_count: row.total_count, // ✅ 保留总记录数
             leaked_keys_sensitive: row.full_key ? {
               full_key: row.full_key,
               raw_context: row.raw_context,
@@ -159,11 +164,17 @@ export default function SensitiveKeysList({ user, onStatsChange }) {
           const totalCount = data[0]?.total_count || 0
           console.log(`✅ 使用分页查询加载: ${data.length} 条记录，总共 ${totalCount} 条`)
         } else {
+          // 没有数据时，设置空数组但保持总数为0
           setKeys([])
+          setTotalRecords(0)
+          console.log('✅ 分页查询无结果')
         }
       }
     } catch (error) {
       console.error('获取密钥失败:', error)
+      // 错误时也要重置状态
+      setKeys([])
+      setTotalRecords(0)
     } finally {
       setLoading(false)
     }
