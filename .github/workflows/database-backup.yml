@@ -1,0 +1,68 @@
+name: Daily Database Backup
+
+on:
+  schedule:
+    - cron: '0 2 * * *'  # 每天凌晨2点执行
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Setup PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+          
+      - name: Create backup
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          # 创建备份目录
+          mkdir -p backups
+          
+          # 生成备份文件名（包含日期）
+          BACKUP_DATE=$(date +%Y%m%d_%H%M%S)
+          BACKUP_FILE="backups/database_backup_${BACKUP_DATE}.sql"
+          
+          # 执行数据库备份
+          pg_dump "$SUPABASE_DB_URL" > "$BACKUP_FILE"
+          
+          # 压缩备份文件
+          gzip "$BACKUP_FILE"
+          
+          echo "BACKUP_FILE=${BACKUP_FILE}.gz" >> $GITHUB_ENV
+          
+      - name: Clean old backups (keep only 7 days)
+        run: |
+          # 删除7天前的备份文件
+          find backups/ -name "database_backup_*.sql.gz" -mtime +7 -delete || true
+          
+      - name: Commit and push backup
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          
+          # 添加备份文件到git
+          git add backups/
+          
+          # 检查是否有变更
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Add database backup $(date +%Y-%m-%d)"
+            git push
+          fi
+          
+      - name: Upload backup as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: database-backup-$(date +%Y%m%d)
+          path: ${{ env.BACKUP_FILE }}
+          retention-days: 7
