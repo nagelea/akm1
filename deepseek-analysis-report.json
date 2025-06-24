@@ -1,0 +1,139 @@
+{
+  "timestamp": "2025-06-24T05:46:18.496Z",
+  "summary": {
+    "total": 20,
+    "valid": 20,
+    "falsePositives": 0,
+    "falsePositiveRate": "0.00%"
+  },
+  "categories": {
+    "openaiProject": 0,
+    "openaiService": 0,
+    "openaiUser": 0,
+    "shortKeys": 0,
+    "other": 0
+  },
+  "validKeys": [
+    {
+      "id": 7411,
+      "preview": "sk-yA8***************************************IsCkAD",
+      "length": 51,
+      "contextSnippet": "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"
+    },
+    {
+      "id": 7408,
+      "preview": "sk-Kyv***************************************4GNmXO",
+      "length": 51,
+      "contextSnippet": "OPENAI_API_KEY=\"sk-KyvwT8tCMQaErVjVjHDxT3B1bkFJhriBOGSCyOi3Rk4GNmXO\""
+    },
+    {
+      "id": 7406,
+      "preview": "sk-fpi***************************************nhr9gp",
+      "length": 51,
+      "contextSnippet": "信息:\\n{context}\\n答案:\"\n    return input_text\n\nfrom openai import OpenAI\nclient = OpenAI(\n    api_key=\""
+    },
+    {
+      "id": 7355,
+      "preview": "sk-LdY***************************************Ncd6g2",
+      "length": 51,
+      "contextSnippet": "3BlbkFJLPUsZr2nrYsrxdbi5vXv\"\r\n\r\nopenai.api_key =  os.environ[\"OPENAI_API_KEY\"]\r\n# openai.api_key = '"
+    },
+    {
+      "id": 7354,
+      "preview": "sk-Qzk***************************************bi5vXv",
+      "length": 51,
+      "contextSnippet": "_evaluation.distance import SearchDistanceEvaluation\r\nimport time\r\n\r\nos.environ[\"OPENAI_API_KEY\"]= \""
+    },
+    {
+      "id": 7353,
+      "preview": "sk-T7o***************************************YubsJc",
+      "length": 51,
+      "contextSnippet": "import openai\r\n\r\nopenai.api_key = \"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\"\r\n\r\nmessages "
+    },
+    {
+      "id": 7343,
+      "preview": "sk-eKA***************************************p176zL",
+      "length": 51,
+      "contextSnippet": "ng GPT-3.5 API của OpenAI để trả lời chat\ndef generate_gpt3_response(prompt):\n    openai.api_key = \""
+    },
+    {
+      "id": 7342,
+      "preview": "sk-qtr***************************************MIW1Nx",
+      "length": 51,
+      "contextSnippet": "enAI\r\nclient = OpenAI(\r\n    base_url='https://xiaoai.plus/v1',\r\n    # sk-xxx替换为自己的key\r\n    api_key='"
+    },
+    {
+      "id": 7341,
+      "preview": "sk-xqM***************************************zB4ZIr",
+      "length": 51,
+      "contextSnippet": "pandas as pd\nimport streamlit as st\nimport joblib\n\n# Set your OpenAI API key here\nopenai_api_key = '"
+    },
+    {
+      "id": 7336,
+      "preview": "sk-G9y***************************************FEROrx",
+      "length": 51,
+      "contextSnippet": "      \"api_url\": \"https://api.stability.ai/v2beta/stable-image/generate/ultra\",\n        \"api_key\": \""
+    },
+    {
+      "id": 7310,
+      "preview": "sk-7iY***************************************XlXXQe",
+      "length": 51,
+      "contextSnippet": "secrets.token_hex(16)\r\nprint(secret_key)\r\n\r\n#d823243f4b3906be44452a1c8f82ee0a\r\n# open ai api        "
+    },
+    {
+      "id": 6950,
+      "preview": "sk-8WB***************************************jFjHgr",
+      "length": 51,
+      "contextSnippet": "ins OPENAI_API_KEY\n# !pip install dotenv\n# import dotenv\n# dotenv.load_dotenv(\".env\")\nOPENAI_KEY = \""
+    },
+    {
+      "id": 6940,
+      "preview": "sk-oHO***************************************YsmkWe",
+      "length": 51,
+      "contextSnippet": "// const apiUrl = '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';\r\nconst chatbotToggler = doc"
+    },
+    {
+      "id": 6938,
+      "preview": "sk-XjY***************************************eoyjrU",
+      "length": 51,
+      "contextSnippet": "wn: false }}/>\n        </Stack.Navigator>\n      </NavigationContainer>\n    </CartProvider>\n  );\n}\n//"
+    },
+    {
+      "id": 6937,
+      "preview": "sk-Cos***************************************aOnjOf",
+      "length": 51,
+      "contextSnippet": "\n      }\n  const handleTextInput=(text) =>{\n    setInputMessage(text)\n    console.log(text)\n  }\n  //"
+    },
+    {
+      "id": 6934,
+      "preview": "sk-YOQ***************************************x7Srh4",
+      "length": 51,
+      "contextSnippet": "// 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\nimport { Configuration, OpenAIApi } from \"ope"
+    },
+    {
+      "id": 6932,
+      "preview": "sk-yvf***************************************pW7X4n",
+      "length": 51,
+      "contextSnippet": "process.env);\r\n// import { OpenAI } from \"openai\";\r\n\r\n// const openai = new OpenAI({\r\n//   apiKey: \""
+    },
+    {
+      "id": 6931,
+      "preview": "sk-IJw***************************************QRfLyz",
+      "length": 51,
+      "contextSnippet": "RN_COUNT || '3' ,\n    ETAT : process.env.PRESENCE || '',\n    //GPT : process.env.OPENAI_API_KEY || '"
+    },
+    {
+      "id": 6928,
+      "preview": "sk-pJC***************************************P9HaSw",
+      "length": 51,
+      "contextSnippet": "_ == \"__main__\":\n    # ask_url('https://arxiv.org/pdf/1706.03762.pdf','summarize the paper')\n    ## "
+    },
+    {
+      "id": 6927,
+      "preview": "sk-kH4***************************************F8uz5N",
+      "length": 51,
+      "contextSnippet": "'context'] = df['title']+df['content']\r\nimport os\r\nimport  openai\r\n#os.environ[\"OPENAI_API_KEY\"] = \""
+    }
+  ],
+  "falsePositives": []
+}

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import supabase from '../../../lib/supabase'
 import SensitiveKeysList from './SensitiveKeysList'
 import VerificationDebug from './VerificationDebug'
+import AnalyticsDashboard from '../../components/AnalyticsDashboard'
 
 export default function AdminDashboard({ user }) {
   const [activeTab, setActiveTab] = useState('keys')
@@ -124,6 +125,7 @@ export default function AdminDashboard({ user }) {
     { id: 'keys', name: '敏感密钥', icon: '🔑' },
     { id: 'debug', name: '验证调试', icon: '🔧' },
     { id: 'logs', name: '访问日志', icon: '📋' },
+    { id: 'analytics', name: '访问统计', icon: '📈' },
     { id: 'users', name: '用户管理', icon: '👥', adminOnly: true },
   ]
 
@@ -226,6 +228,7 @@ export default function AdminDashboard({ user }) {
             {activeTab === 'keys' && <SensitiveKeysList user={user} onStatsChange={fetchStats} />}
             {activeTab === 'debug' && <VerificationDebug onStatsChange={fetchStats} />}
             {activeTab === 'logs' && <AccessLogsList user={user} />}
+            {activeTab === 'analytics' && <AnalyticsDashboard />}
             {activeTab === 'users' && user.role === 'admin' && <UserManagement />}
           </div>
         </div>

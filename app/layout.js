@@ -1,4 +1,5 @@
 import './globals.css'
+import AnalyticsProvider from './components/AnalyticsProvider'
 
 export const metadata = {
   title: 'AI API Key Monitor',
@@ -27,7 +28,9 @@ export default function RootLayout({ children }) {
           </div>
         </nav>
         <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-          {children}
+          <AnalyticsProvider>
+            {children}
+          </AnalyticsProvider>
         </main>
       </body>
     </html>

@@ -21,7 +21,12 @@
     "re-extract:azure": "node scripts/re-extract-azure-keys.js",
     "analyze:vertex": "node scripts/analyze-vertex-ai.js",
     "cleanup:vertex": "node scripts/cleanup-vertex-ai.js",
-    "consolidate:google": "node scripts/consolidate-google-keys.js"
+    "consolidate:google": "node scripts/consolidate-google-keys.js",
+    "analyze:openai": "node scripts/analyze-openai-false-positives.js",
+    "cleanup:openai": "node scripts/cleanup-openai-false-positives.js",
+    "analyze:deepseek": "node scripts/analyze-deepseek-false-positives.js",
+    "cleanup:deepseek": "node scripts/cleanup-deepseek-false-positives.js",
+    "reprocess:deepseek": "node scripts/reprocess-deepseek-keys.js"
   },
   "keywords": [
     "security",

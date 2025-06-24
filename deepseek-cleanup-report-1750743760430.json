@@ -1,0 +1,12 @@
+{
+  "timestamp": "2025-06-24T05:42:40.430Z",
+  "operation": "dry_run",
+  "summary": {
+    "total": 373,
+    "processed": 373,
+    "deleted": 373,
+    "errors": 0,
+    "successRate": "100.00%"
+  },
+  "deletedIds": []
+}

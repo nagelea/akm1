@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import supabase from '../../lib/supabase'
 import AdminLogin from './components/AdminLogin'
 import AdminDashboard from './components/AdminDashboard'
+import Link from 'next/link'
 
 export default function AdminPage() {
   const [user, setUser] = useState(null)
