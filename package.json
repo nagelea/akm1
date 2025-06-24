@@ -20,7 +20,8 @@
     "reprocess:azure": "node scripts/reprocess-azure-openai.js",
     "re-extract:azure": "node scripts/re-extract-azure-keys.js",
     "analyze:vertex": "node scripts/analyze-vertex-ai.js",
-    "cleanup:vertex": "node scripts/cleanup-vertex-ai.js"
+    "cleanup:vertex": "node scripts/cleanup-vertex-ai.js",
+    "consolidate:google": "node scripts/consolidate-google-keys.js"
   },
   "keywords": [
     "security",

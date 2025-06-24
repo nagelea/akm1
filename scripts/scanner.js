@@ -69,25 +69,11 @@ const KEY_PATTERNS = {
     name: 'Perplexity AI',
     confidence: 'high'
   },
-  google: {
-    pattern: /AIza[0-9A-Za-z_-]{35}/g,
-    name: 'Google AI',
-    confidence: 'high'
-  },
-  google_precise: {
-    pattern: /AIzaSy[a-zA-Z0-9_-]{33}/g,
-    name: 'Google AI (Precise)',
-    confidence: 'high'
-  },
-  palm: {
-    pattern: /AIza[0-9A-Za-z_-]{35}/g,
-    name: 'Google PaLM',
-    confidence: 'high'
-  },
-  gemini: {
-    pattern: /AIza[0-9A-Za-z_-]{35}/g,
-    name: 'Google Gemini',
-    confidence: 'high'
+  google_api: {
+    pattern: /AIza[0-9A-Za-z_-]{35}(?![0-9A-Za-z_-])/g,
+    name: 'Google AI API',
+    confidence: 'high',
+    description: 'Google AI API Keys (Gemini, PaLM, etc.)'
   },
   fireworks: {
     pattern: /fw_[a-zA-Z0-9]{32,48}/g,
@@ -1022,10 +1008,8 @@ class APIKeyScanner {
           return await this.verifyOpenAI(key);
         case 'anthropic':
           return await this.verifyAnthropic(key);
-        case 'google':
+        case 'google_api':
         case 'google_service':
-        case 'palm':
-        case 'gemini':
           return await this.verifyGoogle(key);
         case 'huggingface':
           return await this.verifyHuggingFace(key);
