@@ -50,7 +50,7 @@ const KEY_PATTERNS = {
     confidence: 'high'
   },
   openrouter: {
-    pattern: /sk-or-[a-zA-Z0-9-]{32,68}/g,
+    pattern: /sk-or-v1-[a-f0-9]{64}(?![a-f0-9])|sk-or-[a-zA-Z0-9-]{32,68}(?![a-zA-Z0-9-])/g,
     name: 'OpenRouter',
     confidence: 'high'
   },
@@ -612,11 +612,24 @@ class APIKeyScanner {
       
       // 收集所有找到的密钥及其置信度
       const foundKeys = [];
+      const processedKeys = new Set(); // 防止重复处理同一个密钥
       
-      for (const [type, config] of Object.entries(allPatterns)) {
+      // 按置信度排序模式：high -> medium -> low
+      const sortedPatterns = Object.entries(allPatterns).sort((a, b) => {
+        const confidenceOrder = { 'high': 0, 'medium': 1, 'low': 2 };
+        return confidenceOrder[a[1].confidence] - confidenceOrder[b[1].confidence];
+      });
+      
+      for (const [type, config] of sortedPatterns) {
         const matches = fileContent.match(config.pattern);
         if (matches) {
           for (const key of matches) {
+            // 防止重复处理（同一个密钥已被高置信度模式匹配）
+            if (processedKeys.has(key)) {
+              console.log(`🔄 跳过重复密钥 ${this.maskKey(key)} (已被更高置信度模式处理)`);
+              continue;
+            }
+            
             // 过滤明显的假密钥
             if (this.isLikelyFake(key, fileContent)) {
               continue;
@@ -633,6 +646,10 @@ class APIKeyScanner {
               confidence: config.confidence,
               keyConfig: config
             });
+            
+            // 标记为已处理
+            processedKeys.add(key);
+            console.log(`✅ 检测到 ${config.confidence} 置信度 ${type} 密钥: ${this.maskKey(key)}`);
           }
         }
       }
