@@ -31,8 +31,14 @@ jobs:
           BACKUP_DATE=$(date +%Y%m%d_%H%M%S)
           BACKUP_FILE="backups/database_backup_${BACKUP_DATE}.sql"
           
+          # 登录 Supabase
+          supabase login --token $SUPABASE_ACCESS_TOKEN
+          
+          # 链接到项目
+          supabase link --project-ref $PROJECT_REF
+          
           # 使用 Supabase CLI 进行备份
-          supabase db dump --project-ref $PROJECT_REF --password $SUPABASE_DB_PASSWORD > "$BACKUP_FILE"
+          supabase db dump --db-url "postgresql://postgres:$SUPABASE_DB_PASSWORD@db.$PROJECT_REF.supabase.co:5432/postgres" > "$BACKUP_FILE"
           
           # 压缩备份文件
           gzip "$BACKUP_FILE"
