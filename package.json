@@ -17,7 +17,10 @@
     "fix:incomplete": "node scripts/fix-incomplete-keys.js",
     "analyze:azure": "node scripts/analyze-azure-openai.js",
     "cleanup:azure": "node scripts/cleanup-azure-openai.js",
-    "reprocess:azure": "node scripts/reprocess-azure-openai.js"
+    "reprocess:azure": "node scripts/reprocess-azure-openai.js",
+    "re-extract:azure": "node scripts/re-extract-azure-keys.js",
+    "analyze:vertex": "node scripts/analyze-vertex-ai.js",
+    "cleanup:vertex": "node scripts/cleanup-vertex-ai.js"
   },
   "keywords": [
     "security",

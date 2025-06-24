@@ -166,10 +166,13 @@ const KEY_PATTERNS = {
     context_required: ['mistral']
   },
   vertex_ai: {
-    pattern: /[a-zA-Z0-9_-]{20,}/g,
+    pattern: /[a-zA-Z0-9_-]{40,200}(?![a-zA-Z0-9_-])/g,
     name: 'Google Vertex AI',
     confidence: 'low',
-    context_required: ['vertex', 'gcp', 'google-cloud']
+    context_required: ['vertex', 'google', 'gcp'],
+    context_exclude: ['commit', 'hash', 'sha', 'md5', 'git', 'github', 'example', 'test', 'demo'],
+    min_context_matches: 2,
+    strict_validation: true
   }
 };
 
