@@ -16,7 +16,8 @@
     "sql:cleanup": "node scripts/run-sql-cleanup.js",
     "fix:incomplete": "node scripts/fix-incomplete-keys.js",
     "analyze:azure": "node scripts/analyze-azure-openai.js",
-    "cleanup:azure": "node scripts/cleanup-azure-openai.js"
+    "cleanup:azure": "node scripts/cleanup-azure-openai.js",
+    "reprocess:azure": "node scripts/reprocess-azure-openai.js"
   },
   "keywords": [
     "security",
