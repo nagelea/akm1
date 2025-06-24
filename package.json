@@ -26,7 +26,8 @@
     "cleanup:openai": "node scripts/cleanup-openai-false-positives.js",
     "analyze:deepseek": "node scripts/analyze-deepseek-false-positives.js",
     "cleanup:deepseek": "node scripts/cleanup-deepseek-false-positives.js",
-    "reprocess:deepseek": "node scripts/reprocess-deepseek-keys.js"
+    "reprocess:deepseek": "node scripts/reprocess-deepseek-keys.js",
+    "export:keys": "node scripts/export-keys.js"
   },
   "keywords": [
     "security",
