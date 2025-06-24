@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import supabase from '../../../lib/supabase'
 
-export default function KeyStatistics({ keys, onFilterChange }) {
+export default function KeyStatistics({ keys, onFilterChange, currentFilters }) {
   const [stats, setStats] = useState({})
   const [filteredStats, setFilteredStats] = useState({})
   const [activeFilters, setActiveFilters] = useState({
@@ -12,53 +13,94 @@ export default function KeyStatistics({ keys, onFilterChange }) {
     status: 'all'
   })
 
-  useEffect(() => {
-    calculateStats()
-  }, [keys])
+  // 判断是否有筛选条件
+  const hasActiveFilters = activeFilters.keyType !== 'all' || 
+                          activeFilters.severity !== 'all' || 
+                          activeFilters.confidence !== 'all' || 
+                          activeFilters.status !== 'all'
 
   useEffect(() => {
-    calculateFilteredStats()
+    // 使用数据库统计而不是前端计算
+    fetchDatabaseStats()
+  }, [])
+
+  useEffect(() => {
+    // 当筛选条件改变时，获取筛选后的统计
+    if (hasActiveFilters) {
+      fetchFilteredStats()
+    }
+  }, [activeFilters])
+
+  useEffect(() => {
+    // 同步外部筛选条件到内部状态
+    if (currentFilters) {
+      setActiveFilters(currentFilters)
+    }
+  }, [currentFilters])
+
+  useEffect(() => {
+    // 当筛选条件改变时，不需要重新计算统计
+    // 筛选统计应该通过数据库查询获得，这里暂时保留原逻辑用于显示
+    if (hasActiveFilters) {
+      calculateFilteredStats()
+    }
   }, [keys, activeFilters])
 
-  const calculateStats = () => {
-    if (!keys || keys.length === 0) {
-      setStats({})
-      return
-    }
-
-    const newStats = {
-      total: keys.length,
-      byType: {},
-      bySeverity: {},
-      byConfidence: {},
-      byStatus: {},
-      recentCount: 0
-    }
-
-    // 计算各种统计
-    keys.forEach(key => {
-      // 按类型统计
-      newStats.byType[key.key_type] = (newStats.byType[key.key_type] || 0) + 1
+  const fetchDatabaseStats = async () => {
+    try {
+      const { data, error } = await supabase.rpc('get_dashboard_stats')
       
-      // 按严重程度统计
-      newStats.bySeverity[key.severity] = (newStats.bySeverity[key.severity] || 0) + 1
-      
-      // 按置信度统计
-      newStats.byConfidence[key.confidence] = (newStats.byConfidence[key.confidence] || 0) + 1
-      
-      // 按状态统计
-      newStats.byStatus[key.status] = (newStats.byStatus[key.status] || 0) + 1
-      
-      // 最近24小时
-      const keyDate = new Date(key.created_at)
-      const now = new Date()
-      const hoursDiff = (now - keyDate) / (1000 * 60 * 60)
-      if (hoursDiff <= 24) {
-        newStats.recentCount++
+      if (error) {
+        console.error('获取统计数据失败:', error)
+        return
       }
-    })
+      
+      if (data && data.length > 0) {
+        const dbStats = data[0]
+        const newStats = {
+          total: dbStats.total_keys || 0,
+          byType: dbStats.key_type_distribution || {},
+          bySeverity: dbStats.severity_distribution || {},
+          byConfidence: {}, // 可以扩展
+          byStatus: dbStats.status_distribution || {},
+          recentCount: dbStats.today_keys || 0
+        }
+        setStats(newStats)
+      }
+    } catch (error) {
+      console.error('获取统计数据失败:', error)
+    }
+  }
 
-    setStats(newStats)
+  const fetchFilteredStats = async () => {
+    try {
+      const { data, error } = await supabase.rpc('get_filtered_stats', {
+        filter_key_type: activeFilters.keyType || 'all',
+        filter_severity: activeFilters.severity || 'all',
+        filter_confidence: activeFilters.confidence || 'all',
+        filter_status: activeFilters.status || 'all'
+      })
+      
+      if (error) {
+        console.error('获取筛选统计数据失败:', error)
+        return
+      }
+      
+      if (data && data.length > 0) {
+        const dbStats = data[0]
+        const newFilteredStats = {
+          total: dbStats.total_keys || 0,
+          byType: dbStats.key_type_distribution || {},
+          bySeverity: dbStats.severity_distribution || {},
+          byConfidence: {}, // 可以扩展
+          byStatus: dbStats.status_distribution || {},
+          recentCount: dbStats.today_keys || 0
+        }
+        setFilteredStats(newFilteredStats)
+      }
+    } catch (error) {
+      console.error('获取筛选统计数据失败:', error)
+    }
   }
 
   const calculateFilteredStats = () => {
@@ -164,12 +206,6 @@ export default function KeyStatistics({ keys, onFilterChange }) {
       default: return 'text-gray-600 bg-gray-100'
     }
   }
-
-  // 判断是否有筛选条件
-  const hasActiveFilters = activeFilters.keyType !== 'all' || 
-                          activeFilters.severity !== 'all' || 
-                          activeFilters.confidence !== 'all' || 
-                          activeFilters.status !== 'all'
 
   // 选择显示全部统计还是筛选后的统计
   const displayStats = hasActiveFilters ? filteredStats : stats

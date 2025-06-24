@@ -54,9 +54,9 @@ export default function Home() {
       if (keysError) {
         console.log('新密钥函数不可用，使用备用方法:', keysError)
         
-        // 备用方案：使用原来的方法
+        // 备用方案：直接查询表
         const { data: fallbackKeys } = await supabase
-          .from('recent_keys')
+          .from('leaked_keys')
           .select('*')
           .order('first_seen', { ascending: false })
           .limit(50)

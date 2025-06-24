@@ -398,6 +398,7 @@ export default function SensitiveKeysList({ user, onStatsChange }) {
       <KeyStatistics 
         keys={keys} 
         onFilterChange={handleFilterChange}
+        currentFilters={filters}
       />
 
       {/* 搜索框 */}

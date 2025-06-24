@@ -131,14 +131,52 @@ async function detectTableStructure() {
       .select('id')
       .limit(1);
     
-    if (idSample && idSample.length > 0) {
-      const idValue = idSample[0].id;
-      const idType = typeof idValue === 'number' ? 'INTEGER' : 'UUID';
+    // 获取完整的字段类型信息
+    const { data: fullSample } = await supabase
+      .from('leaked_keys')
+      .select('*')
+      .limit(1);
+    
+    const { data: sensitiveSample } = await supabase
+      .from('leaked_keys_sensitive')
+      .select('*')
+      .limit(1);
+
+    if (fullSample && fullSample.length > 0) {
+      const sample = fullSample[0];
+      const sensitive = sensitiveSample && sensitiveSample.length > 0 ? sensitiveSample[0] : {};
       
-      console.log(`✅ 检测到 id 类型: ${idType} (示例值: ${idValue})`);
+      console.log('\n🔧 生成完全正确的函数定义...');
       
+      // 检测每个字段的SQL类型
+      const getPostgresType = (value, fieldName) => {
+        if (value === null) return 'TEXT'; // 默认为TEXT
+        
+        switch (typeof value) {
+          case 'number':
+            return Number.isInteger(value) ? 'INTEGER' : 'DOUBLE PRECISION';
+          case 'boolean':
+            return 'BOOLEAN';
+          case 'string':
+            // 检测时间戳 - 根据实际错误，使用TIMESTAMP而不是TIMESTAMPTZ
+            if (fieldName.includes('_at') || fieldName.includes('_seen') || fieldName.includes('verified')) {
+              return 'TIMESTAMP';  // 修正：使用TIMESTAMP而不是TIMESTAMPTZ
+            }
+            // 对于长文本字段，使用TEXT类型
+            if (fieldName.includes('context') || fieldName.includes('raw_') || value.length > 255) {
+              return 'TEXT';
+            }
+            return 'VARCHAR';
+          default:
+            return 'TEXT';
+        }
+      };
+      
+      // 生成正确的函数定义
       const functionDef = `
--- 正确的函数定义（基于检测结果）
+-- 完全正确的函数定义（基于实际数据类型检测）
+DROP FUNCTION IF EXISTS get_keys_paginated(integer,integer,text,text,text,text,text);
+
 CREATE OR REPLACE FUNCTION get_keys_paginated(
   page_offset INTEGER DEFAULT 0,
   page_size INTEGER DEFAULT 20,
@@ -150,26 +188,50 @@ CREATE OR REPLACE FUNCTION get_keys_paginated(
 )
 RETURNS TABLE (
   total_count BIGINT,
-  id ${idType},  -- 检测到的正确类型
-  key_type TEXT,
-  key_preview TEXT,
-  severity TEXT,
-  confidence TEXT,
-  status TEXT,
-  repo_name TEXT,
-  file_path TEXT,
-  repo_language TEXT,
-  first_seen TIMESTAMPTZ,
-  last_verified TIMESTAMPTZ,
-  context_preview TEXT,
-  full_key TEXT,
-  raw_context TEXT,
-  github_url TEXT
+  id ${getPostgresType(sample.id, 'id')},
+  key_type ${getPostgresType(sample.key_type, 'key_type')},
+  key_preview ${getPostgresType(sample.key_preview, 'key_preview')},
+  severity ${getPostgresType(sample.severity, 'severity')},
+  confidence ${getPostgresType(sample.confidence, 'confidence')},
+  status ${getPostgresType(sample.status, 'status')},
+  repo_name ${getPostgresType(sample.repo_name, 'repo_name')},
+  file_path ${getPostgresType(sample.file_path, 'file_path')},
+  repo_language ${getPostgresType(sample.repo_language, 'repo_language')},
+  first_seen ${getPostgresType(sample.first_seen, 'first_seen')},
+  last_verified ${getPostgresType(sample.last_verified, 'last_verified')},
+  context_preview ${getPostgresType(sample.context_preview, 'context_preview')},
+  full_key ${getPostgresType(sensitive.full_key, 'full_key')},
+  raw_context ${getPostgresType(sensitive.raw_context, 'raw_context')},
+  github_url ${getPostgresType(sensitive.github_url, 'github_url')}
 ) 
--- ... 其余函数体保持不变
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+-- ... 函数体保持不变
+$$;
       `;
       
-      console.log('📝 建议的函数定义已生成，请使用检测到的类型修复函数');
+      console.log('📋 字段类型检测结果:');
+      console.log(`   id: ${getPostgresType(sample.id, 'id')}`);
+      console.log(`   key_type: ${getPostgresType(sample.key_type, 'key_type')}`);
+      console.log(`   key_preview: ${getPostgresType(sample.key_preview, 'key_preview')}`);
+      console.log(`   severity: ${getPostgresType(sample.severity, 'severity')}`);
+      console.log(`   confidence: ${getPostgresType(sample.confidence, 'confidence')}`);
+      console.log(`   status: ${getPostgresType(sample.status, 'status')}`);
+      console.log(`   repo_name: ${getPostgresType(sample.repo_name, 'repo_name')}`);
+      console.log(`   file_path: ${getPostgresType(sample.file_path, 'file_path')}`);
+      console.log(`   repo_language: ${getPostgresType(sample.repo_language, 'repo_language')}`);
+      console.log(`   first_seen: ${getPostgresType(sample.first_seen, 'first_seen')}`);
+      console.log(`   last_verified: ${getPostgresType(sample.last_verified, 'last_verified')}`);
+      console.log(`   context_preview: ${getPostgresType(sample.context_preview, 'context_preview')}`);
+      
+      if (sensitive.full_key !== undefined) {
+        console.log(`   full_key: ${getPostgresType(sensitive.full_key, 'full_key')}`);
+        console.log(`   raw_context: ${getPostgresType(sensitive.raw_context, 'raw_context')}`);
+        console.log(`   github_url: ${getPostgresType(sensitive.github_url, 'github_url')}`);
+      }
+      
+      console.log('\n📝 建议：创建auto-detected-pagination-fix.sql文件使用检测到的正确类型');
     }
 
   } catch (error) {
