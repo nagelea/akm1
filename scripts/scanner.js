@@ -1066,10 +1066,54 @@ class APIKeyScanner {
 
   async verifyGoogle(key) {
     try {
+      // 预检查：空密钥直接返回无效
+      if (!key || key.trim() === '') {
+        return { isValid: false, details: 'Empty API key' };
+      }
+      
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`);
-      return { isValid: response.ok };
-    } catch {
-      return { isValid: false };
+      
+      // Google API 验证逻辑：
+      // - 有效密钥: 200 OK (返回模型列表)
+      // - 无效密钥: 400 Bad Request with "API key not valid" 
+      // - 无权限/未注册: 403 Forbidden
+      // - 其他错误: 各种状态码
+      
+      if (response.ok) {
+        // 200 OK - 密钥有效且有权限
+        return { isValid: true, details: 'Valid Google AI API key with access' };
+      }
+      
+      // 检查具体的错误响应
+      const errorData = await response.json().catch(() => null);
+      
+      if (response.status === 400 && errorData?.error?.message?.includes('API key not valid')) {
+        // 400 + "API key not valid" - 密钥格式无效
+        return { isValid: false, details: 'Invalid API key format' };
+      }
+      
+      if (response.status === 403) {
+        // 检查是否是未注册调用者（空密钥等）
+        if (errorData?.error?.message?.includes('unregistered callers') || 
+            errorData?.error?.message?.includes('API Key or other form of API consumer identity')) {
+          return { isValid: false, details: 'Missing or invalid API key' };
+        }
+        // 其他403可能是有效密钥但权限不足
+        return { isValid: true, details: 'Valid key but insufficient permissions for Generative AI API' };
+      }
+      
+      // 其他错误情况，可能是有效密钥但服务问题
+      return { 
+        isValid: false, 
+        details: `API returned ${response.status}: ${errorData?.error?.message || 'Unknown error'}` 
+      };
+      
+    } catch (error) {
+      // 网络错误等
+      return { 
+        isValid: false, 
+        details: `Network error: ${error.message}` 
+      };
     }
   }
 
