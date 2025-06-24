@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
-import { initAnalytics, trackPageView } from '@/lib/analytics'
+import { initAnalytics, trackPageView } from '../../lib/analytics'
 import { usePathname } from 'next/navigation'
 
 export default function AnalyticsProvider({ children }) {

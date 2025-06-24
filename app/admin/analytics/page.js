@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import AnalyticsDashboard from '@/app/components/AnalyticsDashboard'
+import AnalyticsDashboard from '../../components/AnalyticsDashboard'
 import { useRouter } from 'next/navigation'
 
 export default function AnalyticsPage() {

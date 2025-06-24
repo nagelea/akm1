@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { getAnalyticsData } from '@/lib/analytics'
+import { getAnalyticsData } from '../../lib/analytics'
 
 export default function AnalyticsDashboard() {
   const [stats, setStats] = useState(null)

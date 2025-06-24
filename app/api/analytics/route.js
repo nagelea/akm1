@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import supabase from '@/lib/supabase'
+import supabase from '../../../lib/supabase'
 import crypto from 'crypto'
 
 // 获取客户端IP地址
