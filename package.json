@@ -14,7 +14,9 @@
     "db:detect": "node scripts/detect-table-structure.js",
     "clean:incomplete": "node scripts/cleanup-incomplete-keys.js",
     "sql:cleanup": "node scripts/run-sql-cleanup.js",
-    "fix:incomplete": "node scripts/fix-incomplete-keys.js"
+    "fix:incomplete": "node scripts/fix-incomplete-keys.js",
+    "analyze:azure": "node scripts/analyze-azure-openai.js",
+    "cleanup:azure": "node scripts/cleanup-azure-openai.js"
   },
   "keywords": [
     "security",
