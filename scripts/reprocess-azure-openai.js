@@ -405,9 +405,20 @@ class AzureOpenAIReprocessor {
     }
   }
 
-  maskKey(key) {
-    if (!key || key.length < 8) return key;
-    return key.substring(0, 4) + '*'.repeat(Math.max(0, key.length - 8)) + key.substring(key.length - 4);
+  maskKey(key, maxLength = 95) {
+    if (!key) return '';
+    if (key.length <= 8) return '*'.repeat(key.length);
+    
+    const basicMask = key.substring(0, 6) + '*'.repeat(Math.max(key.length - 12, 4)) + key.substring(key.length - 6);
+    
+    // If it exceeds maxLength, truncate intelligently
+    if (basicMask.length > maxLength) {
+      const availableMiddle = maxLength - 12; // 6 chars start + 6 chars end
+      const truncatedMask = key.substring(0, 6) + '*'.repeat(Math.max(availableMiddle, 4)) + key.substring(key.length - 6);
+      return truncatedMask;
+    }
+    
+    return basicMask;
   }
 
   printSummary() {
