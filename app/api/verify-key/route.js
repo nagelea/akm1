@@ -94,6 +94,29 @@ async function verifyOpenAI(key, context = null) {
   }
 }
 
+async function verifyXAI(key) {
+  try {
+    const response = await fetch('https://api.x.ai/v1/models', {
+      headers: { 
+        'Authorization': `Bearer ${key}`,
+        'Content-Type': 'application/json'
+      }
+    })
+    
+    if (response.ok) {
+      console.log('xAI: Verification successful')
+      return true
+    } else {
+      console.log(`xAI: API returned ${response.status}`)
+      return false
+    }
+    
+  } catch (error) {
+    console.log('xAI: Verification error:', error.message)
+    return false
+  }
+}
+
 async function verifyAnthropic(key) {
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -369,6 +392,9 @@ export async function POST(request) {
       case 'openai_service':
       case 'deepseek':
         isValid = await verifyOpenAI(key, context)
+        break
+      case 'xai':
+        isValid = await verifyXAI(key)
         break
       case 'anthropic':
         isValid = await verifyAnthropic(key)

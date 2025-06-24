@@ -75,6 +75,11 @@ const KEY_PATTERNS = {
     confidence: 'high',
     description: 'Google AI API Keys (Gemini, PaLM, etc.)'
   },
+  xai: {
+    pattern: /xai-[a-zA-Z0-9]{80}(?![a-zA-Z0-9])/g,
+    name: 'xAI (Grok)',
+    confidence: 'high'
+  },
   fireworks: {
     pattern: /fw_[a-zA-Z0-9]{32,48}/g,
     name: 'Fireworks AI',
@@ -1007,6 +1012,8 @@ class APIKeyScanner {
         case 'openai_org':
         case 'deepseek':
           return await this.verifyOpenAI(key);
+        case 'xai':
+          return await this.verifyXAI(key);
         case 'anthropic':
           return await this.verifyAnthropic(key);
         case 'google_api':
@@ -1036,6 +1043,17 @@ class APIKeyScanner {
   async verifyOpenAI(key) {
     try {
       const response = await fetch('https://api.openai.com/v1/models', {
+        headers: { 'Authorization': `Bearer ${key}` }
+      });
+      return { isValid: response.ok };
+    } catch {
+      return { isValid: false };
+    }
+  }
+
+  async verifyXAI(key) {
+    try {
+      const response = await fetch('https://api.x.ai/v1/models', {
         headers: { 'Authorization': `Bearer ${key}` }
       });
       return { isValid: response.ok };
