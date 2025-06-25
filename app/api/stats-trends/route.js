@@ -80,16 +80,24 @@ export async function GET() {
     // 计算趋势百分比
     const calculateTrend = (current, previous) => {
       if (previous === 0) {
-        return current > 0 ? { change: '+100%', type: 'increase' } : { change: '0%', type: 'neutral' }
+        if (current === 0) {
+          return { change: '0%', type: 'neutral' }
+        } else {
+          return { change: '+100%', type: 'increase' }
+        }
       }
       
-      const percentage = ((current - previous) / previous * 100).toFixed(1)
-      const absPercentage = Math.abs(percentage)
+      if (current === 0) {
+        return { change: '-100%', type: 'decrease' }
+      }
       
-      if (percentage > 0) {
-        return { change: `+${absPercentage}%`, type: 'increase' }
-      } else if (percentage < 0) {
-        return { change: `-${absPercentage}%`, type: 'decrease' }
+      const percentage = ((current - previous) / previous * 100)
+      const roundedPercentage = Math.round(percentage * 10) / 10 // 保留1位小数，四舍五入
+      
+      if (roundedPercentage > 0) {
+        return { change: `+${roundedPercentage}%`, type: 'increase' }
+      } else if (roundedPercentage < 0) {
+        return { change: `${roundedPercentage}%`, type: 'decrease' }
       } else {
         return { change: '0%', type: 'neutral' }
       }
@@ -125,7 +133,9 @@ export async function GET() {
       details: {
         yesterday: stats.yesterday,
         lastWeek: stats.lastWeek,
-        highSeverityLastWeek: stats.highSeverityLastWeek
+        highSeverityLastWeek: stats.highSeverityLastWeek,
+        totalThisWeek: totalThisWeek,
+        totalLastWeek: totalLastWeek
       }
     }
 

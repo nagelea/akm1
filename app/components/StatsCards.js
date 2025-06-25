@@ -34,7 +34,7 @@ export default function StatsCards({ stats }) {
       change: trends?.total_keys?.trend?.change || '0%',
       changeType: trends?.total_keys?.trend?.type || 'neutral',
       icon: '🔢',
-      description: '累计监测到的API密钥总数 (本周vs上周增长率)'
+      description: '累计监测到的API密钥总数' + (trends?.details?.totalThisWeek !== undefined ? ` (本周新增: ${trends.details.totalThisWeek}, 上周新增: ${trends.details.totalLastWeek})` : '')
     },
     {
       title: '今日新增',
