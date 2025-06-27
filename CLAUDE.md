@@ -50,6 +50,9 @@ The system uses Supabase with strict Row Level Security (RLS):
 - `leaked_keys_sensitive`: Admin-only complete keys
 - `admin_users`: Admin authentication
 - `daily_stats`: Aggregated statistics
+- `visitor_stats`: IP access tracking with geolocation
+- `online_users`: Real-time user activity
+- `ip_blacklist`/`ip_whitelist`: IP access control
 
 #### Scanner System (`scripts/scanner.js`)
 - Multi-provider AI key detection (20+ services)
@@ -78,6 +81,7 @@ The system uses Supabase with strict Row Level Security (RLS):
 #### API Structure (`/app/api/`)
 - **Public APIs**: `/api/stats`, `/api/keys` (masked data only)
 - **Admin APIs**: `/api/admin/*` (requires authentication)
+- **Analytics APIs**: `/api/analytics`, `/api/ip-analytics` (visitor tracking & IP analysis)
 - **Utility APIs**: `/api/verify-key`, `/api/extract-keys`, `/api/stats-trends`
 
 ### Key Detection Patterns
@@ -102,6 +106,7 @@ Priority order matters - OpenAI patterns are checked before DeepSeek to handle s
 Always use the SQL files in root directory:
 - `database-simple.sql`: Main database schema with RLS policies
 - `database-clear.sql`: Reset database (destructive)
+- `setup-ip-analytics-complete.sql`: Complete IP analytics system setup
 
 When modifying database schema, update both the SQL files and corresponding API routes.
 
@@ -139,6 +144,8 @@ Three automated workflows:
 - `scan-api-keys.yml`: Scheduled scanning every 4 hours
 - `verify-keys.yml`: Daily key verification across providers
 - `database-backup.yml`: Daily encrypted database backups (GPG AES256)
+  - Includes IP analytics tables: `visitor_stats`, `online_users`
+  - Automatic geographic data backup and recovery
 
 ### Backup Security
 Database backups are automatically encrypted using GPG with AES256 symmetric encryption:
@@ -166,3 +173,28 @@ Admin access requires both:
 2. Matching record in `admin_users` table with `is_active = true`
 
 The `is_admin()` database function checks both conditions automatically.
+
+## IP Analytics System
+
+### Features
+- **Geographic Analysis**: Real-time IP geolocation with country/city mapping
+- **Risk Assessment**: Automated threat detection based on access patterns
+- **Activity Monitoring**: 24-hour access distribution and session tracking
+- **Access Control**: IP blacklist/whitelist management with auto-detection
+
+### Setup
+1. Execute `setup-ip-analytics-complete.sql` in Supabase SQL Editor
+2. Geographic data is automatically resolved for new visitors
+3. Access admin panel → IP Analytics tab for dashboard
+
+### API Endpoints
+- `GET /api/ip-analytics?type=summary` - Overview statistics
+- `GET /api/ip-analytics?type=geographic` - Country/city distribution  
+- `GET /api/ip-analytics?type=risk-analysis` - IP threat assessment
+- `GET /api/ip-analytics?type=resolve-locations` - Manual geo resolution
+
+### Database Functions
+- `get_ip_analytics_summary(days)` - Statistical overview
+- `get_ip_risk_analysis_simple(days, limit)` - Risk analysis
+- `check_ip_access(ip)` - Access permission check
+- `auto_detect_risky_ips()` - Automated threat detection
