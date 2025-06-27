@@ -437,6 +437,7 @@ export default function BulkKeyImport({ onStatsChange }) {
           <li>• 建议先使用"预览提取"功能确认识别结果</li>
           <li>• <strong>完整密钥安全存储</strong>：支持后续验证和分析</li>
           <li>• <strong>自动验证功能</strong>：可选择导入后立即验证密钥有效性</li>
+          <li>• <strong>状态管理</strong>：未验证的密钥状态为"unknown"，便于GitHub Actions自动处理</li>
         </ul>
       </div>
     </div>

@@ -236,7 +236,7 @@ export async function POST(request) {
             key_hash: keyHash,
             confidence: keyData.confidence,
             severity: keyData.severity,
-            status: 'unverified',
+            status: 'unknown',
             source_type: keyData.source_type,
             file_path: keyData.source_url,
             repo_name: null,
