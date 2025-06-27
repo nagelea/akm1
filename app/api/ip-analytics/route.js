@@ -308,9 +308,12 @@ export async function GET(request) {
 
         for (const ip of uniqueIPs) {
           try {
+            console.log(`正在解析 IP: ${ip}`)
             const location = await getIPLocation(ip)
+            console.log(`IP ${ip} 解析结果:`, location)
+            
             if (location && location.country !== 'Unknown') {
-              const { error: updateError } = await supabase
+              const { data: updateResult, error: updateError } = await supabase
                 .from('visitor_stats')
                 .update({
                   country: location.country,
@@ -320,13 +323,19 @@ export async function GET(request) {
                 })
                 .eq('ip_address', ip)
                 .is('country', null)
+                .select('id')
 
-              if (!updateError) {
+              if (updateError) {
+                console.error(`更新 IP ${ip} 失败:`, updateError)
+              } else {
+                console.log(`✅ IP ${ip} 更新成功，影响 ${updateResult.length} 条记录`)
                 updatedCount++
               }
+            } else {
+              console.log(`⚠️ IP ${ip} 解析失败或返回Unknown`)
             }
             // 添加延迟避免API限流
-            await new Promise(resolve => setTimeout(resolve, 100))
+            await new Promise(resolve => setTimeout(resolve, 200))
           } catch (error) {
             console.error(`Failed to resolve location for IP ${ip}:`, error)
           }
