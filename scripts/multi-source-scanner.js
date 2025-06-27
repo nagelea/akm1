@@ -291,10 +291,10 @@ async function main() {
   try {
     const GitLabScanner = require('./gitlab-scanner');
     scanner.registerScanner('gitlab', GitLabScanner, {
-      enabled: process.env.ENABLE_GITLAB_SCAN === 'true'
+      enabled: process.env.ENABLE_GITLAB_SCAN !== 'false' // 默认启用
     });
   } catch (error) {
-    console.log('GitLab scanner not available');
+    console.log('GitLab scanner not available:', error.message);
   }
   
   // 运行所有扫描器

@@ -32,7 +32,8 @@ const KEY_PATTERNS = {
 };
 
 class GitLabScanner {
-  constructor() {
+  constructor(config = {}) {
+    this.config = config;
     this.supabase = createClient(
       process.env.SUPABASE_URL, 
       process.env.SUPABASE_SERVICE_KEY
@@ -162,7 +163,7 @@ class GitLabScanner {
     return 'low';
   }
 
-  async scanGitLab() {
+  async scan() {
     console.log('🔍 Starting GitLab scan...');
     
     const searchTerms = ['sk-', 'sk-ant-', 'AIza'];
@@ -217,7 +218,7 @@ async function main() {
   const scanner = new GitLabScanner();
   
   try {
-    await scanner.scanGitLab();
+    await scanner.scan();
   } catch (error) {
     console.error('❌ Scan failed:', error);
     process.exit(1);
