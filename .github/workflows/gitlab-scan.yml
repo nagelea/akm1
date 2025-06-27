@@ -1,0 +1,130 @@
+name: GitLab API Key Scan
+
+on:
+  schedule:
+    # 每天运行一次: 下午2点 (UTC)
+    - cron: '0 14 * * *'
+  workflow_dispatch:
+    inputs:
+      scanner_type:
+        description: 'Type of GitLab scanner to use'
+        required: false
+        default: 'public'
+        type: choice
+        options:
+          - public
+          - authenticated
+      max_projects:
+        description: 'Maximum number of projects to scan'
+        required: false
+        default: '30'
+
+jobs:
+  gitlab-scan:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Run GitLab public scan
+        if: github.event.inputs.scanner_type == 'public' || github.event.inputs.scanner_type == ''
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          MAX_PROJECTS: ${{ github.event.inputs.max_projects || '30' }}
+        run: |
+          echo "🔍 Starting GitLab public projects scan..."
+          echo "Max projects: $MAX_PROJECTS"
+          echo "Scanner type: public (no authentication required)"
+          
+          node scripts/gitlab-public-scanner.js
+          
+      - name: Run GitLab authenticated scan
+        if: github.event.inputs.scanner_type == 'authenticated'
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+        run: |
+          echo "🔍 Starting GitLab authenticated scan..."
+          echo "Scanner type: authenticated (requires GITLAB_TOKEN)"
+          
+          if [ -z "$GITLAB_TOKEN" ]; then
+            echo "❌ GITLAB_TOKEN is required for authenticated scan"
+            echo "💡 Add GITLAB_TOKEN to repository secrets or use public scanner"
+            exit 1
+          fi
+          
+          node scripts/gitlab-scanner.js
+          
+      - name: Save scan results summary
+        run: |
+          echo "📊 GitLab scan completed at $(date)"
+          echo "Check the repository's admin dashboard for detailed results"
+          
+      - name: Report scan statistics
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          # 创建简单的统计报告脚本
+          cat > scan_stats.js << 'EOF'
+          const { createClient } = require('@supabase/supabase-js');
+          
+          async function getRecentStats() {
+            const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+            
+            try {
+              // 获取最近1小时的GitLab发现
+              const { data, error } = await supabase
+                .from('leaked_keys')
+                .select('service, source_type, created_at')
+                .like('source_type', '%gitlab%')
+                .gte('created_at', new Date(Date.now() - 60*60*1000).toISOString());
+              
+              if (error) throw error;
+              
+              console.log('📈 Recent GitLab scan results:');
+              console.log(`   🔑 Keys found in last hour: ${data.length}`);
+              
+              if (data.length > 0) {
+                const services = data.reduce((acc, item) => {
+                  acc[item.service] = (acc[item.service] || 0) + 1;
+                  return acc;
+                }, {});
+                
+                console.log('   📋 By service:');
+                for (const [service, count] of Object.entries(services)) {
+                  console.log(`      ${service}: ${count}`);
+                }
+              }
+              
+            } catch (error) {
+              console.error('Failed to get stats:', error.message);
+            }
+          }
+          
+          getRecentStats();
+          EOF
+          
+          node scan_stats.js
+          
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "❌ GitLab scan failed"
+          echo "Please check the logs for details"
+          echo "Common issues:"
+          echo "  - Missing environment variables"
+          echo "  - GitLab API rate limiting"
+          echo "  - Network connectivity issues"

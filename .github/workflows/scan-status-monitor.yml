@@ -1,0 +1,251 @@
+name: Scan Status Monitor
+
+on:
+  schedule:
+    # 每小时检查一次扫描状态
+    - cron: '0 * * * *'
+  workflow_dispatch:
+    inputs:
+      report_type:
+        description: 'Type of report to generate'
+        required: false
+        default: 'summary'
+        type: choice
+        options:
+          - summary
+          - detailed
+          - performance
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Generate scan status report
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          REPORT_TYPE: ${{ github.event.inputs.report_type || 'summary' }}
+        run: |
+          # 创建状态监控脚本
+          cat > scan_monitor.js << 'EOF'
+          const { createClient } = require('@supabase/supabase-js');
+          
+          async function generateReport() {
+            const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+            const reportType = process.env.REPORT_TYPE || 'summary';
+            
+            try {
+              console.log('📊 MULTI-SOURCE SCAN STATUS REPORT');
+              console.log('=' .repeat(50));
+              console.log(`Report Type: ${reportType.toUpperCase()}`);
+              console.log(`Generated: ${new Date().toISOString()}`);
+              console.log('=' .repeat(50));
+              
+              // 获取最近24小时的发现
+              const { data: recentKeys, error: keysError } = await supabase
+                .from('leaked_keys')
+                .select('service, source_type, severity, confidence, created_at')
+                .gte('created_at', new Date(Date.now() - 24*60*60*1000).toISOString())
+                .order('created_at', { ascending: false });
+              
+              if (keysError) throw keysError;
+              
+              console.log(`\n🔑 RECENT DISCOVERIES (Last 24h): ${recentKeys.length} keys`);
+              
+              if (recentKeys.length > 0) {
+                // 按数据源分组
+                const bySource = recentKeys.reduce((acc, key) => {
+                  const source = key.source_type || 'unknown';
+                  acc[source] = (acc[source] || 0) + 1;
+                  return acc;
+                }, {});
+                
+                console.log('\n📋 By Data Source:');
+                for (const [source, count] of Object.entries(bySource)) {
+                  const emoji = source.includes('github') ? '🐙' : 
+                               source.includes('gitlab') ? '🦊' : 
+                               source.includes('gist') ? '📝' : '🔍';
+                  console.log(`   ${emoji} ${source}: ${count} keys`);
+                }
+                
+                // 按服务分组
+                const byService = recentKeys.reduce((acc, key) => {
+                  acc[key.service] = (acc[key.service] || 0) + 1;
+                  return acc;
+                }, {});
+                
+                console.log('\n🤖 By AI Service:');
+                for (const [service, count] of Object.entries(byService)) {
+                  console.log(`   ${service}: ${count} keys`);
+                }
+                
+                // 严重程度分布
+                const bySeverity = recentKeys.reduce((acc, key) => {
+                  acc[key.severity] = (acc[key.severity] || 0) + 1;
+                  return acc;
+                }, {});
+                
+                console.log('\n⚠️  By Severity:');
+                for (const [severity, count] of Object.entries(bySeverity)) {
+                  const emoji = severity === 'high' ? '🔴' : 
+                               severity === 'medium' ? '🟡' : '🟢';
+                  console.log(`   ${emoji} ${severity}: ${count} keys`);
+                }
+              }
+              
+              // 获取扫描会话统计
+              if (reportType === 'detailed' || reportType === 'performance') {
+                const { data: sessions, error: sessionsError } = await supabase
+                  .from('scan_sessions')
+                  .select('*')
+                  .gte('completed_at', new Date(Date.now() - 7*24*60*60*1000).toISOString())
+                  .order('completed_at', { ascending: false })
+                  .limit(10);
+                
+                if (!sessionsError && sessions.length > 0) {
+                  console.log(`\n🔄 RECENT SCAN SESSIONS (Last 7 days): ${sessions.length}`);
+                  
+                  sessions.forEach((session, index) => {
+                    const duration = (session.duration_ms / 1000 / 60).toFixed(1);
+                    const status = session.status === 'completed' ? '✅' : 
+                                  session.status === 'failed' ? '❌' : '🔄';
+                    console.log(`   ${status} ${session.scan_type} (${session.sources?.join(',') || 'N/A'}) - ${session.total_found} keys in ${duration}m`);
+                  });
+                }
+              }
+              
+              // 性能统计
+              if (reportType === 'performance') {
+                const { data: sourceStats, error: statsError } = await supabase
+                  .from('data_source_stats')
+                  .select('*')
+                  .gte('scan_date', new Date(Date.now() - 7*24*60*60*1000).toISOString().split('T')[0]);
+                
+                if (!statsError && sourceStats.length > 0) {
+                  console.log('\n⚡ PERFORMANCE METRICS (Last 7 days):');
+                  
+                  const perfBySource = sourceStats.reduce((acc, stat) => {
+                    if (!acc[stat.source_name]) {
+                      acc[stat.source_name] = {
+                        requests: 0,
+                        keys: 0,
+                        avgResponse: 0,
+                        errors: 0
+                      };
+                    }
+                    acc[stat.source_name].requests += stat.requests_made || 0;
+                    acc[stat.source_name].keys += stat.keys_extracted || 0;
+                    acc[stat.source_name].avgResponse += stat.avg_response_time_ms || 0;
+                    acc[stat.source_name].errors += stat.errors_count || 0;
+                    return acc;
+                  }, {});
+                  
+                  for (const [source, stats] of Object.entries(perfBySource)) {
+                    console.log(`   📊 ${source}:`);
+                    console.log(`      Requests: ${stats.requests}, Keys: ${stats.keys}, Errors: ${stats.errors}`);
+                    console.log(`      Avg Response: ${(stats.avgResponse / sourceStats.filter(s => s.source_name === source).length).toFixed(0)}ms`);
+                  }
+                }
+              }
+              
+              // 总体统计
+              const { data: totalStats, error: totalError } = await supabase
+                .from('leaked_keys')
+                .select('service, created_at')
+                .gte('created_at', new Date(Date.now() - 30*24*60*60*1000).toISOString());
+              
+              if (!totalError) {
+                console.log(`\n📈 TOTAL STATISTICS (Last 30 days):`);
+                console.log(`   🔑 Total Keys Found: ${totalStats.length}`);
+                console.log(`   📅 Daily Average: ${(totalStats.length / 30).toFixed(1)} keys/day`);
+                
+                const uniqueServices = new Set(totalStats.map(k => k.service)).size;
+                console.log(`   🤖 Services Monitored: ${uniqueServices}`);
+              }
+              
+              console.log('\n' + '=' .repeat(50));
+              console.log('🎯 Next scheduled scans:');
+              console.log('   GitHub: Every 4 hours');
+              console.log('   GitLab: Daily at 14:00 UTC'); 
+              console.log('   Multi-source: Daily at 08:00 & 20:00 UTC');
+              console.log('=' .repeat(50));
+              
+            } catch (error) {
+              console.error('❌ Report generation failed:', error.message);
+              process.exit(1);
+            }
+          }
+          
+          generateReport();
+          EOF
+          
+          node scan_monitor.js
+          
+      - name: Check for critical alerts
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          # 检查是否有高危密钥需要立即关注
+          cat > alert_check.js << 'EOF'
+          const { createClient } = require('@supabase/supabase-js');
+          
+          async function checkAlerts() {
+            const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
+            
+            try {
+              // 检查最近1小时的高危发现
+              const { data: criticalKeys, error } = await supabase
+                .from('leaked_keys')
+                .select('service, key_partial, source_url, created_at')
+                .eq('severity', 'high')
+                .gte('created_at', new Date(Date.now() - 60*60*1000).toISOString());
+              
+              if (error) throw error;
+              
+              if (criticalKeys.length > 0) {
+                console.log('🚨 CRITICAL ALERT: High severity keys found!');
+                console.log(`   Count: ${criticalKeys.length}`);
+                console.log('   Services affected:', [...new Set(criticalKeys.map(k => k.service))].join(', '));
+                console.log('   Immediate action recommended!');
+                
+                // 在实际环境中，这里可以发送通知到Slack/Discord/Email
+                process.exit(1); // 使workflow显示为失败状态以引起注意
+              } else {
+                console.log('✅ No critical alerts in the last hour');
+              }
+              
+            } catch (error) {
+              console.error('Alert check failed:', error.message);
+            }
+          }
+          
+          checkAlerts();
+          EOF
+          
+          node alert_check.js
+          
+      - name: Update monitoring badge
+        if: always()
+        run: |
+          # 创建状态徽章信息
+          STATUS="active"
+          if [ $? -ne 0 ]; then
+            STATUS="alert"
+          fi
+          
+          echo "📊 Monitoring Status: $STATUS"
+          echo "Last Check: $(date -u)"

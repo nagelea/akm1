@@ -9,7 +9,7 @@ on:
       sources:
         description: 'Comma-separated list of sources to scan (github,gitlab,gist)'
         required: false
-        default: 'github,gist'
+        default: 'github,gitlab,gist'
       parallel:
         description: 'Run scanners in parallel'
         type: boolean
@@ -39,12 +39,12 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
-          ENABLE_GITLAB_SCAN: ${{ contains(github.event.inputs.sources, 'gitlab') || 'true' }}
-          ENABLE_GIST_SCAN: ${{ contains(github.event.inputs.sources, 'gist') || 'true' }}
+          ENABLE_GITLAB_SCAN: ${{ contains(github.event.inputs.sources || 'github,gitlab,gist', 'gitlab') }}
+          ENABLE_GIST_SCAN: ${{ contains(github.event.inputs.sources || 'github,gitlab,gist', 'gist') }}
           PARALLEL_EXECUTION: ${{ github.event.inputs.parallel || 'false' }}
         run: |
           echo "🔍 Starting multi-source API key scan..."
-          echo "Sources: ${{ github.event.inputs.sources || 'github,gist' }}"
+          echo "Sources: ${{ github.event.inputs.sources || 'github,gitlab,gist' }}"
           echo "Parallel: ${{ github.event.inputs.parallel || 'false' }}"
           
           node scripts/multi-source-scanner.js
