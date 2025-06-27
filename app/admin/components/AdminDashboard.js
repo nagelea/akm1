@@ -5,6 +5,7 @@ import supabase from '../../../lib/supabase'
 import SensitiveKeysList from './SensitiveKeysList'
 import VerificationDebug from './VerificationDebug'
 import AnalyticsDashboard from '../../components/AnalyticsDashboard'
+import IPAnalyticsDashboard from '../../components/IPAnalyticsDashboard'
 
 export default function AdminDashboard({ user }) {
   const [activeTab, setActiveTab] = useState('keys')
@@ -126,6 +127,7 @@ export default function AdminDashboard({ user }) {
     { id: 'debug', name: '验证调试', icon: '🔧' },
     { id: 'logs', name: '访问日志', icon: '📋' },
     { id: 'analytics', name: '访问统计', icon: '📈' },
+    { id: 'ip-analytics', name: 'IP 分析', icon: '🌐' },
     { id: 'users', name: '用户管理', icon: '👥', adminOnly: true },
   ]
 
@@ -229,6 +231,7 @@ export default function AdminDashboard({ user }) {
             {activeTab === 'debug' && <VerificationDebug onStatsChange={fetchStats} />}
             {activeTab === 'logs' && <AccessLogsList user={user} />}
             {activeTab === 'analytics' && <AnalyticsDashboard />}
+            {activeTab === 'ip-analytics' && <IPAnalyticsDashboard />}
             {activeTab === 'users' && user.role === 'admin' && <UserManagement />}
           </div>
         </div>

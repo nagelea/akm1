@@ -32,7 +32,7 @@ async function testBackup() {
       console.log(`✅ 自动发现 ${tables.length} 个表:`, tables.join(', '));
     } catch (err) {
       console.log('⚠️  自动发现失败，使用预定义列表:', err.message);
-      tables = ['leaked_keys', 'leaked_keys_sensitive', 'admin_users', 'access_logs', 'daily_stats'];
+      tables = ['leaked_keys', 'leaked_keys_sensitive', 'admin_users', 'access_logs', 'daily_stats', 'visitor_stats', 'online_users'];
     }
     const backup = {};
     
