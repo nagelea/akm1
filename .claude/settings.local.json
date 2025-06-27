@@ -10,7 +10,8 @@
       "Bash(chmod:*)",
       "Bash(mv:*)",
       "Bash(ls:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(git pull:*)"
     ],
     "deny": []
   }
