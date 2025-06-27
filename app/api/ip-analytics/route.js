@@ -211,9 +211,9 @@ export async function GET(request) {
         })
 
       case 'risk-analysis':
-        // IP风险分析
+        // IP风险分析 - 使用简化版本函数
         const { data: riskData, error: riskError } = await supabase
-          .rpc('get_ip_risk_analysis', { days_back: days, ip_limit: limit })
+          .rpc('get_ip_risk_analysis_simple', { days_back: days, ip_limit: limit })
 
         if (riskError) {
           console.error('Risk analysis error:', riskError)
