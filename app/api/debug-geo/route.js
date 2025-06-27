@@ -82,9 +82,7 @@ export async function GET() {
           .from('visitor_stats')
           .update({
             country: location.country,
-            city: location.city,
-            region: location.region,
-            timezone: location.timezone
+            city: location.city
           })
           .eq('ip_address', ip)
           .is('country', null)

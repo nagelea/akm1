@@ -117,9 +117,7 @@ export async function POST(request) {
       if (location) {
         locationData = {
           country: location.country,
-          city: location.city,
-          region: location.region,
-          timezone: location.timezone
+          city: location.city
         }
       }
     }
