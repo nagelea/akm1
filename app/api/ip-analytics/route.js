@@ -281,6 +281,53 @@ export async function GET(request) {
 
         return NextResponse.json(ipInfo)
 
+      case 'resolve-locations':
+        // 解析IP地理位置
+        const { data: ipsToResolve, error: resolveError } = await supabase
+          .from('visitor_stats')
+          .select('ip_address')
+          .is('country', null)
+          .not('ip_address', 'is', null)
+          .neq('ip_address', '127.0.0.1')
+          .limit(limit)
+
+        if (resolveError) throw resolveError
+
+        const uniqueIPs = [...new Set(ipsToResolve.map(item => item.ip_address))]
+        let updatedCount = 0
+
+        for (const ip of uniqueIPs) {
+          try {
+            const location = await getIPLocation(ip)
+            if (location && location.country !== 'Unknown') {
+              const { error: updateError } = await supabase
+                .from('visitor_stats')
+                .update({
+                  country: location.country,
+                  city: location.city,
+                  region: location.region,
+                  timezone: location.timezone
+                })
+                .eq('ip_address', ip)
+                .is('country', null)
+
+              if (!updateError) {
+                updatedCount++
+              }
+            }
+            // 添加延迟避免API限流
+            await new Promise(resolve => setTimeout(resolve, 100))
+          } catch (error) {
+            console.error(`Failed to resolve location for IP ${ip}:`, error)
+          }
+        }
+
+        return NextResponse.json({
+          message: `Updated location for ${updatedCount} IP addresses`,
+          processed: uniqueIPs.length,
+          updated: updatedCount
+        })
+
       default:
         return NextResponse.json({ error: 'Invalid analysis type' }, { status: 400 })
     }

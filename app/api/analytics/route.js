@@ -2,6 +2,41 @@ import { NextResponse } from 'next/server'
 import supabase from '../../../lib/supabase'
 import crypto from 'crypto'
 
+// IP地理位置解析
+async function getIPLocation(ip) {
+  try {
+    // 跳过本地IP
+    if (ip === '127.0.0.1' || ip === 'localhost' || ip.startsWith('192.168.') || ip.startsWith('10.')) {
+      return null
+    }
+    
+    const response = await fetch(`http://ip-api.com/json/${ip}?fields=status,country,countryCode,region,regionName,city,timezone,isp,org`, {
+      timeout: 5000
+    })
+    
+    if (!response.ok) throw new Error('IP API request failed')
+    
+    const data = await response.json()
+    
+    if (data.status === 'success') {
+      return {
+        country: data.country || 'Unknown',
+        countryCode: data.countryCode || 'XX',
+        region: data.regionName || 'Unknown',
+        city: data.city || 'Unknown',
+        timezone: data.timezone || 'Unknown',
+        isp: data.isp || 'Unknown',
+        org: data.org || 'Unknown'
+      }
+    }
+    
+    return null
+  } catch (error) {
+    console.error('IP location lookup failed:', error)
+    return null
+  }
+}
+
 // 获取客户端IP地址
 function getClientIP(request) {
   const forwarded = request.headers.get('x-forwarded-for')
@@ -66,6 +101,29 @@ export async function POST(request) {
     const visitorId = generateVisitorId(ip, userAgent)
     const { deviceType, browser, os } = parseUserAgent(userAgent)
     
+    // 检查是否是新IP，如果是则尝试获取地理位置
+    let locationData = {}
+    
+    const { data: existingIP, error: checkError } = await supabase
+      .from('visitor_stats')
+      .select('country')
+      .eq('ip_address', ip)
+      .not('country', 'is', null)
+      .limit(1)
+    
+    if (!checkError && (!existingIP || existingIP.length === 0)) {
+      // 这是新IP或者之前没有地理位置数据，尝试解析
+      const location = await getIPLocation(ip)
+      if (location) {
+        locationData = {
+          country: location.country,
+          city: location.city,
+          region: location.region,
+          timezone: location.timezone
+        }
+      }
+    }
+    
     // 插入访问记录
     const { error: insertError } = await supabase
       .from('visitor_stats')
@@ -79,7 +137,8 @@ export async function POST(request) {
         browser: browser,
         os: os,
         screen_resolution: screenResolution || null,
-        session_duration: sessionDuration
+        session_duration: sessionDuration,
+        ...locationData
       })
     
     if (insertError) {
