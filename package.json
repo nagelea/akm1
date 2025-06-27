@@ -8,6 +8,8 @@
     "build": "next build",
     "start": "next start",
     "scan": "node scripts/scanner.js",
+    "scan:multi": "node scripts/multi-source-scanner.js",
+    "scan:gitlab": "node scripts/gitlab-scanner.js",
     "export:keys": "node scripts/export-keys.js",
     "decrypt:backup": "node scripts/decrypt-backup.js",
     "restore:backup": "node scripts/restore-backup.js",

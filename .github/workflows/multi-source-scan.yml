@@ -1,0 +1,61 @@
+name: Multi-Source API Key Scan
+
+on:
+  schedule:
+    # 每天运行两次: 上午8点和晚上8点 (UTC)
+    - cron: '0 8,20 * * *'
+  workflow_dispatch:
+    inputs:
+      sources:
+        description: 'Comma-separated list of sources to scan (github,gitlab,gist)'
+        required: false
+        default: 'github,gist'
+      parallel:
+        description: 'Run scanners in parallel'
+        type: boolean
+        required: false
+        default: false
+
+jobs:
+  multi-source-scan:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Run multi-source scan
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+          ENABLE_GITLAB_SCAN: ${{ contains(github.event.inputs.sources, 'gitlab') || 'true' }}
+          ENABLE_GIST_SCAN: ${{ contains(github.event.inputs.sources, 'gist') || 'true' }}
+          PARALLEL_EXECUTION: ${{ github.event.inputs.parallel || 'false' }}
+        run: |
+          echo "🔍 Starting multi-source API key scan..."
+          echo "Sources: ${{ github.event.inputs.sources || 'github,gist' }}"
+          echo "Parallel: ${{ github.event.inputs.parallel || 'false' }}"
+          
+          node scripts/multi-source-scanner.js
+          
+      - name: Log scan completion
+        run: |
+          echo "✅ Multi-source scan completed at $(date)"
+          echo "Check Supabase dashboard for detailed results"
+          
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "❌ Multi-source scan failed"
+          echo "Please check the logs and fix any issues"
