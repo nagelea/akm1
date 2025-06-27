@@ -1,16 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import supabase from '../../../lib/supabase'
-
-// 浏览器兼容的SHA-256哈希函数
-async function hashKey(key) {
-  const encoder = new TextEncoder()
-  const data = encoder.encode(key)
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data)
-  const hashArray = Array.from(new Uint8Array(hashBuffer))
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
-}
 
 export default function BulkKeyImport({ onStatsChange }) {
   const [importText, setImportText] = useState('')
@@ -144,159 +134,31 @@ export default function BulkKeyImport({ onStatsChange }) {
     setResults(null)
 
     try {
-      const patterns = keyPatterns[selectedService] || []
-      const foundKeys = []
-      
-      // 提取所有匹配的密钥
-      patterns.forEach(pattern => {
-        const matches = importText.match(pattern.regex) || []
-        matches.forEach(key => {
-          if (!foundKeys.some(k => k.key === key)) {
-            foundKeys.push({
-              key,
-              service: selectedService,
-              confidence: selectedConfidence,
-              severity: selectedSeverity,
-              source_url: sourceUrl || null,
-              source_type: sourceType
-            })
-          }
+      // 调用批量导入API
+      const response = await fetch('/api/bulk-import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          importText,
+          selectedService,
+          selectedSeverity,
+          selectedConfidence,
+          sourceUrl,
+          sourceType,
+          autoVerify
         })
       })
 
-      if (foundKeys.length === 0) {
-        setResults({
-          success: false,
-          message: `未在输入内容中找到 ${selectedService} 格式的密钥`,
-          imported: 0,
-          duplicates: 0,
-          errors: 0
-        })
-        setIsProcessing(false)
-        return
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || result.details || '导入失败')
       }
 
-      // 批量处理密钥
-      let imported = 0
-      let duplicates = 0
-      let errors = 0
-      let verified = 0
-      let verificationErrors = 0
-
-      for (const keyData of foundKeys) {
-        try {
-          const keyHash = await hashKey(keyData.key)
-          
-          // 检查重复
-          const { data: existing } = await supabase
-            .from('leaked_keys')
-            .select('id')
-            .eq('key_hash', keyHash)
-            .single()
-
-          if (existing) {
-            duplicates++
-            continue
-          }
-
-          // 插入公开密钥信息
-          const { data: keyRecord, error } = await supabase
-            .from('leaked_keys')
-            .insert({
-              key_type: keyData.service,
-              key_preview: keyData.key.substring(0, 10) + '...',
-              key_hash: keyHash,
-              confidence: keyData.confidence,
-              severity: keyData.severity,
-              status: 'unverified',
-              source_type: keyData.source_type,
-              file_path: keyData.source_url,
-              repo_name: null,
-              context_preview: `批量导入 - ${keyData.service}`,
-              first_seen: new Date().toISOString(),
-              created_at: new Date().toISOString()
-            })
-            .select()
-            .single()
-
-          if (error) {
-            console.error('插入主表失败:', error)
-            errors++
-          } else if (keyRecord) {
-            // 插入敏感数据表（完整密钥）
-            const { error: sensitiveError } = await supabase
-              .from('leaked_keys_sensitive')
-              .insert({
-                key_id: keyRecord.id,
-                full_key: keyData.key,
-                raw_context: `批量导入来源: ${keyData.source_url || '手动导入'}`,
-                github_url: keyData.source_url,
-                created_at: new Date().toISOString()
-              })
-
-            if (sensitiveError) {
-              console.error('插入敏感表失败:', sensitiveError)
-              // 删除已插入的主表记录
-              await supabase.from('leaked_keys').delete().eq('id', keyRecord.id)
-              errors++
-            } else {
-              imported++
-              
-              // 如果启用自动验证，立即验证密钥
-              if (autoVerify) {
-                try {
-                  const verifyResponse = await fetch('/api/verify-key', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                      keyType: keyData.service, 
-                      key: keyData.key,
-                      keyId: keyRecord.id
-                    })
-                  })
-                  
-                  const verifyResult = await verifyResponse.json()
-                  
-                  // 更新密钥状态
-                  if (verifyResult.isValid !== undefined) {
-                    await supabase
-                      .from('leaked_keys')
-                      .update({
-                        status: verifyResult.isValid ? 'valid' : 'invalid',
-                        last_verified: new Date().toISOString()
-                      })
-                      .eq('id', keyRecord.id)
-                    
-                    verified++
-                  }
-                } catch (error) {
-                  console.error('自动验证失败:', error)
-                  verificationErrors++
-                  // 验证失败不影响导入成功
-                }
-              }
-            }
-          }
-        } catch (error) {
-          console.error('处理密钥失败:', error)
-          errors++
-        }
-      }
-
-      setResults({
-        success: imported > 0,
-        message: `批量导入完成`,
-        total: foundKeys.length,
-        imported,
-        duplicates,
-        errors,
-        verified,
-        verificationErrors,
-        autoVerifyEnabled: autoVerify
-      })
+      setResults(result)
 
       // 清空输入
-      if (imported > 0) {
+      if (result.imported > 0) {
         setImportText('')
         setPreviewKeys([])
         setShowPreview(false)
