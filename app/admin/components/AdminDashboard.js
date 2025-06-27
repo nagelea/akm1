@@ -6,6 +6,7 @@ import SensitiveKeysList from './SensitiveKeysList'
 import VerificationDebug from './VerificationDebug'
 import AnalyticsDashboard from '../../components/AnalyticsDashboard'
 import IPAnalyticsDashboard from '../../components/IPAnalyticsDashboard'
+import BulkKeyImport from './BulkKeyImport'
 
 export default function AdminDashboard({ user }) {
   const [activeTab, setActiveTab] = useState('keys')
@@ -124,6 +125,7 @@ export default function AdminDashboard({ user }) {
 
   const tabs = [
     { id: 'keys', name: '敏感密钥', icon: '🔑' },
+    { id: 'import', name: '批量导入', icon: '📥' },
     { id: 'debug', name: '验证调试', icon: '🔧' },
     { id: 'logs', name: '访问日志', icon: '📋' },
     { id: 'analytics', name: '访问统计', icon: '📈' },
@@ -228,6 +230,7 @@ export default function AdminDashboard({ user }) {
           {/* 选项卡内容 */}
           <div className="p-6">
             {activeTab === 'keys' && <SensitiveKeysList user={user} onStatsChange={fetchStats} />}
+            {activeTab === 'import' && <BulkKeyImport onStatsChange={fetchStats} />}
             {activeTab === 'debug' && <VerificationDebug onStatsChange={fetchStats} />}
             {activeTab === 'logs' && <AccessLogsList user={user} />}
             {activeTab === 'analytics' && <AnalyticsDashboard />}
