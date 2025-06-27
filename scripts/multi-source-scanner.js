@@ -289,12 +289,23 @@ async function main() {
   
   // 如果GitLab扫描器可用
   try {
-    const GitLabScanner = require('./gitlab-scanner');
-    scanner.registerScanner('gitlab', GitLabScanner, {
+    // 优先使用公开扫描器（无需认证）
+    const GitLabPublicScanner = require('./gitlab-public-scanner');
+    scanner.registerScanner('gitlab_public', GitLabPublicScanner, {
       enabled: process.env.ENABLE_GITLAB_SCAN !== 'false' // 默认启用
     });
   } catch (error) {
-    console.log('GitLab scanner not available:', error.message);
+    console.log('GitLab public scanner not available:', error.message);
+    
+    // 回退到需要认证的版本
+    try {
+      const GitLabScanner = require('./gitlab-scanner');
+      scanner.registerScanner('gitlab', GitLabScanner, {
+        enabled: !!process.env.GITLAB_TOKEN // 只有在有token时启用
+      });
+    } catch (fallbackError) {
+      console.log('GitLab scanner not available:', fallbackError.message);
+    }
   }
   
   // 运行所有扫描器

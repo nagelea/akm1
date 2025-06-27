@@ -51,6 +51,10 @@ class GitLabScanner {
       const response = await fetch(url, { headers: this.baseHeaders });
       
       if (!response.ok) {
+        if (response.status === 403) {
+          console.warn(`⚠️  GitLab API 403 Forbidden for "${query}" - consider setting GITLAB_TOKEN for higher rate limits`);
+          return [];
+        }
         throw new Error(`GitLab API error: ${response.status}`);
       }
       
