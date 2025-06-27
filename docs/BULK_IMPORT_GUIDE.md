@@ -16,7 +16,7 @@
 
 系统支持以下AI服务的密钥格式自动识别：
 
-- **OpenAI**: `sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
+- **OpenAI**: `sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx` (38-58字符灵活长度)
 - **Anthropic**: `sk-ant-api03-xxxxx...`
 - **Google AI**: `AIzaxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
 - **GitHub**: `ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`

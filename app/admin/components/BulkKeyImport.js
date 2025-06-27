@@ -48,8 +48,8 @@ export default function BulkKeyImport({ onStatsChange }) {
   // 密钥模式定义
   const keyPatterns = {
     'OpenAI': [
-      { regex: /sk-[a-zA-Z0-9]{48}/g, description: 'sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' },
-      { regex: /sk-proj-[a-zA-Z0-9]{48}/g, description: 'sk-proj-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' }
+      { regex: /sk-[a-zA-Z0-9]{38,58}/g, description: 'sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx (38-58字符)' },
+      { regex: /sk-proj-[a-zA-Z0-9]{38,58}/g, description: 'sk-proj-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx (38-58字符)' }
     ],
     'Anthropic': [
       { regex: /sk-ant-api03-[a-zA-Z0-9_-]{95}/g, description: 'sk-ant-api03-xxxxx...' }
