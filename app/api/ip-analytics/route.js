@@ -1,5 +1,20 @@
 import { NextResponse } from 'next/server'
-import supabase from '../../../lib/supabase'
+import { createClient } from '@supabase/supabase-js'
+
+// 使用 service role key 进行数据库操作
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
+
+if (!supabaseUrl || !supabaseServiceKey) {
+  console.error('Missing Supabase environment variables for IP analytics')
+}
+
+const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false
+  }
+})
 
 // IP地理位置解析 (使用免费的 ip-api.com)
 async function getIPLocation(ip) {
