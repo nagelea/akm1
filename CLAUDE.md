@@ -9,36 +9,29 @@ This is an AI API Key Monitor - a Next.js-based security monitoring system that 
 ## Development Commands
 
 ```bash
-# Development
+# Core Development
 npm run dev                    # Start Next.js development server
 npm run build                  # Build production version
 npm run start                  # Start production server
 
-# Database Management
-npm run db:migrate             # Run database migrations
-npm run db:paginate            # Setup paginated RPC functions
-npm run db:pagination          # Setup pagination functions
-npm run db:detect              # Detect table structure
-
-# Key Scanning & Management
+# Key Management
 npm run scan                   # Manual GitHub repository scan
 npm run export:keys            # Export keys by type (supports --type, --format, --status flags)
+npm run extract:keys           # Manual key extraction from text
 
 # Backup & Recovery
 npm run decrypt:backup         # Decrypt encrypted backup files
 npm run restore:backup         # Restore backup to database (supports --dry-run, --table, --confirm)
-
-# Data Cleanup Scripts
-npm run clean:incomplete       # Clean incomplete key records
-npm run sql:cleanup           # Run SQL cleanup operations
-npm run fix:incomplete        # Fix incomplete key data
-npm run analyze:azure         # Analyze Azure OpenAI keys
-npm run cleanup:azure         # Clean Azure OpenAI duplicates
-npm run analyze:openai        # Analyze OpenAI false positives
-npm run cleanup:openai        # Clean OpenAI false positives
-npm run analyze:deepseek      # Analyze DeepSeek false positives
-npm run cleanup:deepseek      # Clean DeepSeek false positives
 ```
+
+### Archived Scripts
+Additional analysis and cleanup scripts are available in `archived/scripts/`:
+- Database migration and setup scripts
+- Key analysis and cleanup utilities  
+- Data validation and recovery tools
+- Performance optimization scripts
+
+To use archived scripts: `node archived/scripts/[script-name].js`
 
 ## Architecture Overview
 

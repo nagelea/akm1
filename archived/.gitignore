@@ -1,0 +1,6 @@
+# Archived Files
+
+# This folder contains development history files
+# Not tracked in git to keep repository clean
+*
+!.gitignore
