@@ -21,8 +21,19 @@ async function testBackup() {
   try {
     console.log('🔍 测试数据库连接和表结构...');
     
-    // 测试连接和表结构
-    const tables = ['leaked_keys', 'leaked_keys_sensitive', 'admin_users', 'daily_stats'];
+    // 尝试自动发现表
+    let tables;
+    try {
+      const { data: discoveredTables, error } = await supabase.rpc('get_user_tables');
+      if (error || !discoveredTables) {
+        throw new Error('自动发现失败');
+      }
+      tables = discoveredTables.map(t => t.table_name);
+      console.log(`✅ 自动发现 ${tables.length} 个表:`, tables.join(', '));
+    } catch (err) {
+      console.log('⚠️  自动发现失败，使用预定义列表:', err.message);
+      tables = ['leaked_keys', 'leaked_keys_sensitive', 'admin_users', 'access_logs', 'daily_stats'];
+    }
     const backup = {};
     
     for (const table of tables) {

@@ -43,8 +43,8 @@ jobs:
           
           async function backup() {
             try {
-              // 获取所有表的数据
-              const tables = ['leaked_keys', 'leaked_keys_sensitive', 'admin_users', 'daily_stats']; // 备份主要表
+              // 获取所有表的数据 - 完整备份所有表
+              const tables = ['leaked_keys', 'leaked_keys_sensitive', 'admin_users', 'access_logs', 'daily_stats'];
               const backup = {};
               
               for (const table of tables) {
