@@ -108,20 +108,27 @@ ANTHROPIC_KEY=sk-ant-api03-abcdef1234567890abcdef1234567890abcdef1234567890abcde
 
 ## 安全特性
 
-### 1. 密钥哈希存储
-- 原始密钥不直接存储
-- 使用SHA-256哈希值进行重复检测
-- 只存储密钥的前10位用于显示
+### 1. 完整密钥安全存储
+- **完整密钥存储**：存储在独立的敏感数据表中，支持后续验证
+- **权限控制**：使用RLS策略，只有管理员可访问敏感数据
+- **SHA-256哈希**：用于重复检测和去重
+- **部分密钥显示**：前端只显示密钥前10位，保护完整信息
 
-### 2. 重复检测
+### 2. 自动验证功能
+- **即时验证**：导入后可选择立即验证密钥有效性
+- **API调用**：直接调用相应服务的API验证密钥
+- **状态更新**：自动更新密钥状态（valid/invalid/unverified）
+- **验证统计**：提供详细的验证成功/失败统计
+
+### 3. 重复检测
 - 自动检测已存在的密钥
 - 避免重复导入相同密钥
 - 提供重复统计信息
 
-### 3. 访问控制
+### 4. 访问控制
 - 只有管理员账户可以访问
-- 操作日志记录（计划中）
-- 导入历史追踪（计划中）
+- 操作日志记录
+- 导入历史追踪
 
 ## 注意事项
 
@@ -169,24 +176,40 @@ ANTHROPIC_KEY=sk-ant-api03-abcdef1234567890abcdef1234567890abcdef1234567890abcde
 
 ### 数据库结构
 ```sql
--- 密钥存储在 leaked_keys 表中
-INSERT INTO leaked_keys (
-  service,           -- AI服务类型
-  key_partial,       -- 密钥前缀（显示用）
-  key_hash,         -- SHA-256哈希值
-  confidence,       -- 置信度
-  severity,         -- 严重程度
-  status,           -- 验证状态
-  source_url,       -- 来源URL
-  source_type,      -- 数据源类型
-  found_at,         -- 发现时间
-  created_at        -- 创建时间
+-- 公开密钥信息表
+CREATE TABLE leaked_keys (
+  key_type VARCHAR(50),      -- AI服务类型
+  key_preview VARCHAR(100),  -- 密钥前缀（显示用）
+  key_hash VARCHAR(64),      -- SHA-256哈希值
+  confidence VARCHAR(10),    -- 置信度
+  severity VARCHAR(10),      -- 严重程度
+  status VARCHAR(20),        -- 验证状态 (valid/invalid/unverified)
+  source_type VARCHAR(20),   -- 数据源类型
+  file_path VARCHAR(500),    -- 文件路径/来源URL
+  last_verified TIMESTAMP,   -- 最后验证时间
+  ...
+);
+
+-- 敏感数据表（完整密钥存储）
+CREATE TABLE leaked_keys_sensitive (
+  key_id INTEGER,            -- 关联主表ID
+  full_key TEXT,            -- 完整的原始密钥
+  raw_context TEXT,         -- 原始上下文
+  github_url TEXT,          -- 直接访问链接
+  ...
 );
 ```
 
+### 已实现功能
+- [x] **完整密钥安全存储**：支持后续验证和分析
+- [x] **自动验证功能**：导入后立即验证密钥有效性
+- [x] **智能格式识别**：支持13+种AI服务密钥格式
+- [x] **重复检测**：基于SHA-256哈希的去重机制
+- [x] **权限控制**：RLS策略保护敏感数据访问
+
 ### 扩展功能计划
-- [ ] 导入历史记录
-- [ ] 批量验证功能
-- [ ] 自定义密钥模式
-- [ ] 导入模板功能
-- [ ] API接口支持
+- [ ] 导入历史记录和审计日志
+- [ ] 自定义密钥模式配置
+- [ ] 导入模板和批量配置
+- [ ] RESTful API接口支持
+- [ ] 加密存储选项

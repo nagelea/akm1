@@ -23,6 +23,7 @@ export default function BulkKeyImport({ onStatsChange }) {
   const [results, setResults] = useState(null)
   const [previewKeys, setPreviewKeys] = useState([])
   const [showPreview, setShowPreview] = useState(false)
+  const [autoVerify, setAutoVerify] = useState(true)
 
   // 服务类型选项
   const serviceOptions = [
@@ -179,6 +180,8 @@ export default function BulkKeyImport({ onStatsChange }) {
       let imported = 0
       let duplicates = 0
       let errors = 0
+      let verified = 0
+      let verificationErrors = 0
 
       for (const keyData of foundKeys) {
         try {
@@ -196,30 +199,83 @@ export default function BulkKeyImport({ onStatsChange }) {
             continue
           }
 
-          // 插入新密钥
-          const { error } = await supabase
+          // 插入公开密钥信息
+          const { data: keyRecord, error } = await supabase
             .from('leaked_keys')
             .insert({
-              service: keyData.service,
-              key_partial: keyData.key.substring(0, 10) + '...',
+              key_type: keyData.service,
+              key_preview: keyData.key.substring(0, 10) + '...',
               key_hash: keyHash,
               confidence: keyData.confidence,
               severity: keyData.severity,
               status: 'unverified',
-              source_url: keyData.source_url,
               source_type: keyData.source_type,
-              file_path: null,
-              repository_name: null,
-              repository_owner: null,
-              found_at: new Date().toISOString(),
+              file_path: keyData.source_url,
+              repo_name: null,
+              context_preview: `批量导入 - ${keyData.service}`,
+              first_seen: new Date().toISOString(),
               created_at: new Date().toISOString()
             })
+            .select()
+            .single()
 
           if (error) {
-            console.error('插入失败:', error)
+            console.error('插入主表失败:', error)
             errors++
-          } else {
-            imported++
+          } else if (keyRecord) {
+            // 插入敏感数据表（完整密钥）
+            const { error: sensitiveError } = await supabase
+              .from('leaked_keys_sensitive')
+              .insert({
+                key_id: keyRecord.id,
+                full_key: keyData.key,
+                raw_context: `批量导入来源: ${keyData.source_url || '手动导入'}`,
+                github_url: keyData.source_url,
+                created_at: new Date().toISOString()
+              })
+
+            if (sensitiveError) {
+              console.error('插入敏感表失败:', sensitiveError)
+              // 删除已插入的主表记录
+              await supabase.from('leaked_keys').delete().eq('id', keyRecord.id)
+              errors++
+            } else {
+              imported++
+              
+              // 如果启用自动验证，立即验证密钥
+              if (autoVerify) {
+                try {
+                  const verifyResponse = await fetch('/api/verify-key', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                      keyType: keyData.service, 
+                      key: keyData.key,
+                      keyId: keyRecord.id
+                    })
+                  })
+                  
+                  const verifyResult = await verifyResponse.json()
+                  
+                  // 更新密钥状态
+                  if (verifyResult.isValid !== undefined) {
+                    await supabase
+                      .from('leaked_keys')
+                      .update({
+                        status: verifyResult.isValid ? 'valid' : 'invalid',
+                        last_verified: new Date().toISOString()
+                      })
+                      .eq('id', keyRecord.id)
+                    
+                    verified++
+                  }
+                } catch (error) {
+                  console.error('自动验证失败:', error)
+                  verificationErrors++
+                  // 验证失败不影响导入成功
+                }
+              }
+            }
           }
         } catch (error) {
           console.error('处理密钥失败:', error)
@@ -233,7 +289,10 @@ export default function BulkKeyImport({ onStatsChange }) {
         total: foundKeys.length,
         imported,
         duplicates,
-        errors
+        errors,
+        verified,
+        verificationErrors,
+        autoVerifyEnabled: autoVerify
       })
 
       // 清空输入
@@ -335,7 +394,7 @@ export default function BulkKeyImport({ onStatsChange }) {
         </div>
 
         {/* 来源URL (可选) */}
-        <div className="mb-6">
+        <div className="mb-4">
           <label className="block text-sm font-medium text-gray-700 mb-2">
             来源URL (可选)
           </label>
@@ -346,6 +405,24 @@ export default function BulkKeyImport({ onStatsChange }) {
             placeholder="https://github.com/user/repo 或其他来源链接"
             className="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
           />
+        </div>
+
+        {/* 自动验证选项 */}
+        <div className="mb-6">
+          <label className="flex items-center">
+            <input
+              type="checkbox"
+              checked={autoVerify}
+              onChange={(e) => setAutoVerify(e.target.checked)}
+              className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            />
+            <span className="ml-2 text-sm text-gray-700">
+              导入后自动验证密钥有效性 (推荐)
+            </span>
+          </label>
+          <p className="text-xs text-gray-500 mt-1">
+            启用后会立即调用相应API验证密钥，但会增加导入时间
+          </p>
         </div>
 
         {/* 密钥格式提示 */}
@@ -451,7 +528,7 @@ export default function BulkKeyImport({ onStatsChange }) {
             <p className="text-gray-700">{results.message}</p>
             
             {results.total && (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mt-4">
                 <div className="text-center">
                   <div className="text-2xl font-bold text-blue-600">{results.total}</div>
                   <div className="text-sm text-gray-500">检测到</div>
@@ -468,6 +545,18 @@ export default function BulkKeyImport({ onStatsChange }) {
                   <div className="text-2xl font-bold text-red-600">{results.errors}</div>
                   <div className="text-sm text-gray-500">导入失败</div>
                 </div>
+                {results.autoVerifyEnabled && (
+                  <>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-purple-600">{results.verified}</div>
+                      <div className="text-sm text-gray-500">已验证</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-orange-600">{results.verificationErrors}</div>
+                      <div className="text-sm text-gray-500">验证失败</div>
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -484,7 +573,8 @@ export default function BulkKeyImport({ onStatsChange }) {
           <li>• 支持从GitHub、GitLab、配置文件、日志等各种来源导入</li>
           <li>• 系统会自动去重，避免重复导入相同的密钥</li>
           <li>• 建议先使用"预览提取"功能确认识别结果</li>
-          <li>• 导入的密钥状态默认为"未验证"，需要后续手动或自动验证</li>
+          <li>• <strong>完整密钥安全存储</strong>：支持后续验证和分析</li>
+          <li>• <strong>自动验证功能</strong>：可选择导入后立即验证密钥有效性</li>
         </ul>
       </div>
     </div>
