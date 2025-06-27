@@ -11,7 +11,8 @@
     "export:keys": "node scripts/export-keys.js",
     "decrypt:backup": "node scripts/decrypt-backup.js",
     "restore:backup": "node scripts/restore-backup.js",
-    "extract:keys": "node scripts/extract-keys.js"
+    "extract:keys": "node scripts/extract-keys.js",
+    "test:backup": "node scripts/test-backup.js"
   },
   "keywords": [
     "security",

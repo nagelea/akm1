@@ -44,7 +44,7 @@ jobs:
           async function backup() {
             try {
               // 获取所有表的数据
-              const tables = ['api_keys']; // 根据实际表名修改
+              const tables = ['leaked_keys', 'leaked_keys_sensitive', 'admin_users', 'daily_stats']; // 备份主要表
               const backup = {};
               
               for (const table of tables) {
@@ -54,15 +54,26 @@ jobs:
                 
                 if (error) {
                   console.error(`Error backing up ${table}:`, error);
+                  // 对于不存在的表，继续备份其他表
+                  backup[table] = [];
                 } else {
-                  backup[table] = data;
-                  console.log(`Backed up ${data.length} records from ${table}`);
+                  backup[table] = data || [];
+                  console.log(`Backed up ${(data || []).length} records from ${table}`);
                 }
               }
+              
+              // 添加备份元数据
+              backup._metadata = {
+                timestamp: new Date().toISOString(),
+                version: '2.0.0',
+                tables: Object.keys(backup).filter(k => k !== '_metadata'),
+                total_records: Object.values(backup).reduce((sum, arr) => sum + (Array.isArray(arr) ? arr.length : 0), 0)
+              };
               
               // 保存备份
               fs.writeFileSync(backupFile, JSON.stringify(backup, null, 2));
               console.log(`Backup saved to ${backupFile}`);
+              console.log(`Total records backed up: ${backup._metadata.total_records}`);
               
             } catch (error) {
               console.error('Backup failed:', error);
