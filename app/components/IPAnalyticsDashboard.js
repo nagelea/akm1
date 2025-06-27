@@ -200,7 +200,7 @@ export default function IPAnalyticsDashboard() {
             <div className="bg-white rounded-lg shadow p-6">
               <h3 className="text-lg font-semibold mb-4">最活跃 IP 地址</h3>
               <div className="space-y-3">
-                {data.topIPs.slice(0, 10).map((ip, index) => (
+                {(data.topIPs || []).slice(0, 10).map((ip, index) => (
                   <div 
                     key={ip.ip} 
                     className="flex items-center justify-between p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100"
@@ -294,7 +294,7 @@ export default function IPAnalyticsDashboard() {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {data.riskAnalysis.map((ip) => (
+                    {(data.riskAnalysis || []).map((ip) => (
                       <tr key={ip.ip_address} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-blue-600">
                           {ip.ip_address}

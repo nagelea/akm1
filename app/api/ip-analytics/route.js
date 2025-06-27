@@ -117,8 +117,11 @@ export async function GET(request) {
         const { data: summaryData, error: summaryError } = await supabase
           .rpc('get_ip_analytics_summary', { days_back: days })
 
-        if (summaryError) throw summaryError
-        return NextResponse.json(summaryData[0] || {})
+        if (summaryError) {
+          console.error('Summary error:', summaryError)
+          return NextResponse.json({})
+        }
+        return NextResponse.json(summaryData?.[0] || {})
 
       case 'top-ips':
         // 最活跃IP地址
@@ -128,7 +131,10 @@ export async function GET(request) {
           .gte('created_at', startDate.toISOString())
           .not('ip_address', 'is', null)
 
-        if (topError) throw topError
+        if (topError) {
+          console.error('Top IPs error:', topError)
+          return NextResponse.json([])
+        }
 
         // 统计每个IP的访问情况
         const ipStats = {}
@@ -191,10 +197,14 @@ export async function GET(request) {
         const { data: riskData, error: riskError } = await supabase
           .rpc('get_ip_risk_analysis', { days_back: days, ip_limit: limit })
 
-        if (riskError) throw riskError
+        if (riskError) {
+          console.error('Risk analysis error:', riskError)
+          return NextResponse.json([])
+        }
 
-        // 为每个IP添加风险评估
-        const riskAnalysis = riskData.map(ip => ({
+        // 确保返回数组，为每个IP添加风险评估
+        const safeRiskData = Array.isArray(riskData) ? riskData : []
+        const riskAnalysis = safeRiskData.map(ip => ({
           ...ip,
           risk: assessIPRisk(ip)
         }))
