@@ -79,15 +79,21 @@ jobs:
           # 执行备份
           node backup_script.js "$BACKUP_FILE"
           
-          # 压缩备份文件
+          # 压缩并加密备份文件
           gzip "$BACKUP_FILE"
           
-          echo "BACKUP_FILE=${BACKUP_FILE}.gz" >> $GITHUB_ENV
+          # 使用GPG对称加密保护备份文件
+          echo "${{ secrets.BACKUP_ENCRYPTION_PASSWORD }}" | gpg --batch --yes --passphrase-fd 0 --symmetric --cipher-algo AES256 --output "${BACKUP_FILE}.gz.gpg" "${BACKUP_FILE}.gz"
+          
+          # 删除原始未加密文件
+          rm "${BACKUP_FILE}.gz"
+          
+          echo "BACKUP_FILE=${BACKUP_FILE}.gz.gpg" >> $GITHUB_ENV
           
       - name: Clean old backups (keep only 7 days)
         run: |
           # 删除7天前的备份文件
-          find backups/ -name "database_backup_*.json.gz" -mtime +7 -delete || true
+          find backups/ -name "database_backup_*.json.gz.gpg" -mtime +7 -delete || true
           
       - name: Commit and push backup
         env:
