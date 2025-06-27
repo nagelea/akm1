@@ -1,7 +1,48 @@
--- 创建IP分析相关的数据库函数
--- 在 Supabase SQL 编辑器中执行
+-- =================================================================
+-- IP 分析系统完整设置脚本
+-- 包含所有必要的表、函数、索引和权限设置
+-- =================================================================
 
--- 1. IP统计概览函数
+-- 1. 创建 IP 分析相关表 (如果不存在)
+-- =================================================================
+
+-- IP黑名单管理表
+CREATE TABLE IF NOT EXISTS ip_blacklist (
+  id SERIAL PRIMARY KEY,
+  ip_address INET NOT NULL UNIQUE,
+  reason VARCHAR(255) NOT NULL,
+  risk_level VARCHAR(20) DEFAULT 'medium',
+  blocked_at TIMESTAMP DEFAULT NOW(),
+  blocked_by VARCHAR(255),
+  auto_detected BOOLEAN DEFAULT false,
+  notes TEXT,
+  expires_at TIMESTAMP,
+  is_active BOOLEAN DEFAULT true
+);
+
+-- IP白名单管理表  
+CREATE TABLE IF NOT EXISTS ip_whitelist (
+  id SERIAL PRIMARY KEY,
+  ip_address INET NOT NULL UNIQUE,
+  description VARCHAR(255),
+  added_at TIMESTAMP DEFAULT NOW(),
+  added_by VARCHAR(255),
+  is_active BOOLEAN DEFAULT true
+);
+
+-- 2. 创建索引优化查询性能
+-- =================================================================
+
+-- IP分析相关索引
+CREATE INDEX IF NOT EXISTS idx_visitor_stats_ip_created ON visitor_stats(ip_address, created_at);
+CREATE INDEX IF NOT EXISTS idx_visitor_stats_country ON visitor_stats(country);
+CREATE INDEX IF NOT EXISTS idx_ip_blacklist_active ON ip_blacklist(ip_address, is_active);
+CREATE INDEX IF NOT EXISTS idx_ip_whitelist_active ON ip_whitelist(ip_address, is_active);
+
+-- 3. 创建 IP 分析函数
+-- =================================================================
+
+-- IP统计概览函数
 CREATE OR REPLACE FUNCTION get_ip_analytics_summary(days_back INTEGER DEFAULT 7)
 RETURNS TABLE (
   total_visits BIGINT,
@@ -105,20 +146,18 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- 2. IP风险分析函数
-CREATE OR REPLACE FUNCTION get_ip_risk_analysis(days_back INTEGER DEFAULT 7, ip_limit INTEGER DEFAULT 50)
+-- IP风险分析函数(简化版本，避免类型冲突)
+CREATE OR REPLACE FUNCTION get_ip_risk_analysis_simple(days_back INTEGER DEFAULT 7, ip_limit INTEGER DEFAULT 50)
 RETURNS TABLE (
   ip_address INET,
   visit_count BIGINT,
   unique_pages BIGINT,
   unique_days BIGINT,
   avg_session_duration NUMERIC,
-  hour_span INTEGER,
   first_visit TIMESTAMP,
   last_visit TIMESTAMP,
-  countries TEXT[],
-  browsers TEXT[],
-  user_agents TEXT[]
+  primary_country VARCHAR(50),
+  primary_browser VARCHAR(50)
 ) AS $$
 DECLARE
   start_date TIMESTAMP;
@@ -132,15 +171,30 @@ BEGIN
     COUNT(DISTINCT vs.page_path)::BIGINT as unique_pages,
     COUNT(DISTINCT DATE(vs.created_at))::BIGINT as unique_days,
     AVG(COALESCE(vs.session_duration, 0))::NUMERIC as avg_session_duration,
-    (
-      EXTRACT(hour FROM MAX(vs.created_at)) - 
-      EXTRACT(hour FROM MIN(vs.created_at))
-    )::INTEGER as hour_span,
     MIN(vs.created_at) as first_visit,
     MAX(vs.created_at) as last_visit,
-    array_agg(DISTINCT vs.country) FILTER (WHERE vs.country IS NOT NULL) as countries,
-    array_agg(DISTINCT vs.browser) FILTER (WHERE vs.browser IS NOT NULL) as browsers,
-    array_agg(DISTINCT substring(vs.user_agent, 1, 100)) FILTER (WHERE vs.user_agent IS NOT NULL) as user_agents
+    -- 获取最常见的国家
+    (
+      SELECT country 
+      FROM visitor_stats vs2 
+      WHERE vs2.ip_address = vs.ip_address 
+        AND vs2.country IS NOT NULL
+        AND vs2.created_at >= start_date
+      GROUP BY country 
+      ORDER BY COUNT(*) DESC 
+      LIMIT 1
+    ) as primary_country,
+    -- 获取最常见的浏览器
+    (
+      SELECT browser 
+      FROM visitor_stats vs3 
+      WHERE vs3.ip_address = vs.ip_address 
+        AND vs3.browser IS NOT NULL
+        AND vs3.created_at >= start_date
+      GROUP BY browser 
+      ORDER BY COUNT(*) DESC 
+      LIMIT 1
+    ) as primary_browser
   FROM visitor_stats vs
   WHERE vs.created_at >= start_date
     AND vs.ip_address IS NOT NULL
@@ -150,7 +204,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- 3. IP地理位置更新函数
+-- IP地理位置更新函数
 CREATE OR REPLACE FUNCTION update_ip_locations()
 RETURNS INTEGER AS $$
 DECLARE
@@ -179,31 +233,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- 4. IP黑名单管理表
-CREATE TABLE IF NOT EXISTS ip_blacklist (
-  id SERIAL PRIMARY KEY,
-  ip_address INET NOT NULL UNIQUE,
-  reason VARCHAR(255) NOT NULL,
-  risk_level VARCHAR(20) DEFAULT 'medium',
-  blocked_at TIMESTAMP DEFAULT NOW(),
-  blocked_by VARCHAR(255),
-  auto_detected BOOLEAN DEFAULT false,
-  notes TEXT,
-  expires_at TIMESTAMP,
-  is_active BOOLEAN DEFAULT true
-);
-
--- 5. IP白名单管理表  
-CREATE TABLE IF NOT EXISTS ip_whitelist (
-  id SERIAL PRIMARY KEY,
-  ip_address INET NOT NULL UNIQUE,
-  description VARCHAR(255),
-  added_at TIMESTAMP DEFAULT NOW(),
-  added_by VARCHAR(255),
-  is_active BOOLEAN DEFAULT true
-);
-
--- 6. IP访问限制检查函数
+-- IP访问权限检查函数
 CREATE OR REPLACE FUNCTION check_ip_access(check_ip INET)
 RETURNS TABLE (
   allowed BOOLEAN,
@@ -239,7 +269,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- 7. 自动风险检测函数
+-- 自动风险检测函数
 CREATE OR REPLACE FUNCTION auto_detect_risky_ips()
 RETURNS INTEGER AS $$
 DECLARE
@@ -274,17 +304,22 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- 创建索引优化查询性能
-CREATE INDEX IF NOT EXISTS idx_visitor_stats_ip_created ON visitor_stats(ip_address, created_at);
-CREATE INDEX IF NOT EXISTS idx_visitor_stats_country ON visitor_stats(country);
-CREATE INDEX IF NOT EXISTS idx_ip_blacklist_active ON ip_blacklist(ip_address, is_active);
-CREATE INDEX IF NOT EXISTS idx_ip_whitelist_active ON ip_whitelist(ip_address, is_active);
+-- 4. 设置 RLS 策略
+-- =================================================================
 
 -- 启用RLS
 ALTER TABLE ip_blacklist ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ip_whitelist ENABLE ROW LEVEL SECURITY;
 
--- RLS策略
+-- 删除可能存在的旧策略
+DROP POLICY IF EXISTS "Admin access to IP blacklist" ON ip_blacklist;
+DROP POLICY IF EXISTS "Admin access to IP whitelist" ON ip_whitelist;
+DROP POLICY IF EXISTS "Service role IP management" ON ip_blacklist;
+DROP POLICY IF EXISTS "Service role IP management" ON ip_whitelist;
+DROP POLICY IF EXISTS "Allow update for service role" ON visitor_stats;
+DROP POLICY IF EXISTS "Allow update for authenticated users" ON visitor_stats;
+
+-- IP管理表的RLS策略
 CREATE POLICY "Admin access to IP blacklist" ON ip_blacklist
   FOR ALL USING (
     EXISTS (
@@ -304,23 +339,77 @@ CREATE POLICY "Admin access to IP whitelist" ON ip_whitelist
   );
 
 -- 服务角色权限
-CREATE POLICY "Service role IP management" ON ip_blacklist FOR ALL USING (auth.role() = 'service_role');
-CREATE POLICY "Service role IP management" ON ip_whitelist FOR ALL USING (auth.role() = 'service_role');
+CREATE POLICY "Service role IP management blacklist" ON ip_blacklist FOR ALL USING (auth.role() = 'service_role');
+CREATE POLICY "Service role IP management whitelist" ON ip_whitelist FOR ALL USING (auth.role() = 'service_role');
 
--- 授予函数执行权限
+-- visitor_stats 表的更新权限(修复地理位置更新问题)
+CREATE POLICY "Allow update for service role" ON visitor_stats
+  FOR UPDATE TO service_role
+  USING (true)
+  WITH CHECK (true);
+
+CREATE POLICY "Allow update for authenticated users" ON visitor_stats
+  FOR UPDATE TO authenticated
+  USING (true)
+  WITH CHECK (true);
+
+-- 5. 授予函数执行权限
+-- =================================================================
+
 GRANT EXECUTE ON FUNCTION get_ip_analytics_summary(INTEGER) TO authenticated, anon;
-GRANT EXECUTE ON FUNCTION get_ip_risk_analysis(INTEGER, INTEGER) TO authenticated;
+GRANT EXECUTE ON FUNCTION get_ip_risk_analysis_simple(INTEGER, INTEGER) TO authenticated;
 GRANT EXECUTE ON FUNCTION check_ip_access(INET) TO authenticated, anon;
 GRANT EXECUTE ON FUNCTION auto_detect_risky_ips() TO authenticated;
 GRANT EXECUTE ON FUNCTION update_ip_locations() TO authenticated;
 
--- 创建定时任务(需要在Supabase中手动设置)
--- SELECT cron.schedule('auto-risk-detection', '*/30 * * * *', 'SELECT auto_detect_risky_ips();');
--- SELECT cron.schedule('ip-location-update', '0 3 * * *', 'SELECT update_ip_locations();');
+-- 6. 添加注释
+-- =================================================================
 
 COMMENT ON FUNCTION get_ip_analytics_summary(INTEGER) IS 'IP分析统计概览';
-COMMENT ON FUNCTION get_ip_risk_analysis(INTEGER, INTEGER) IS 'IP风险分析详情';
+COMMENT ON FUNCTION get_ip_risk_analysis_simple(INTEGER, INTEGER) IS 'IP风险分析详情(简化版本)';
 COMMENT ON FUNCTION check_ip_access(INET) IS '检查IP访问权限';
 COMMENT ON FUNCTION auto_detect_risky_ips() IS '自动检测风险IP';
 COMMENT ON TABLE ip_blacklist IS 'IP黑名单管理';
 COMMENT ON TABLE ip_whitelist IS 'IP白名单管理';
+
+-- 7. 可选：创建定时任务(需要手动启用)
+-- =================================================================
+
+-- 注释掉的定时任务，需要在Supabase中手动设置
+-- SELECT cron.schedule('auto-risk-detection', '*/30 * * * *', 'SELECT auto_detect_risky_ips();');
+-- SELECT cron.schedule('ip-location-update', '0 3 * * *', 'SELECT update_ip_locations();');
+
+-- 8. 验证设置
+-- =================================================================
+
+-- 验证表是否创建成功
+SELECT 
+  schemaname, 
+  tablename, 
+  tableowner 
+FROM pg_tables 
+WHERE tablename IN ('ip_blacklist', 'ip_whitelist', 'visitor_stats')
+ORDER BY tablename;
+
+-- 验证函数是否创建成功
+SELECT 
+  routine_name, 
+  routine_type 
+FROM information_schema.routines 
+WHERE routine_name LIKE '%ip%' 
+  AND routine_schema = 'public'
+ORDER BY routine_name;
+
+-- 验证RLS策略
+SELECT 
+  schemaname, 
+  tablename, 
+  policyname, 
+  permissive, 
+  roles, 
+  cmd 
+FROM pg_policies 
+WHERE tablename IN ('ip_blacklist', 'ip_whitelist', 'visitor_stats')
+ORDER BY tablename, policyname;
+
+SELECT 'IP Analytics system setup completed successfully!' as result;
