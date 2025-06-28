@@ -99,7 +99,21 @@
       "confidence": "high",
       "enabled": true
     },
-    
+    {
+  "name": "Claude Code API Keys",
+  "search_patterns": [
+    "sk-ant-oat01"
+  ],
+  "regex_pattern": "sk-ant-(?:oat01|ort01)-[a-zA-Z0-9_-]{95,200}(?![a-zA-Z0-9_-])",
+  "confidence": "high", 
+  "enabled": true,
+  "description": "Detects Claude/Anthropic API keys including access tokens and refresh tokens",
+  "examples": [
+    "sk-ant-api03-xxxxx",
+    "sk-ant-oat01-xxxxx (OAuth access token)",
+    "sk-ant-ort01-xxxxx (OAuth refresh token)"
+  ]
+},
     {
       "name": "Custom API Keys",
       "search_patterns": [
@@ -112,4 +126,4 @@
       "enabled": false
     }
   ]
-}，
+}
