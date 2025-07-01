@@ -19,32 +19,42 @@ export default function Home() {
 
   async function fetchData() {
     try {
-      // 尝试使用新的统计函数
-      const { data: statsData, error: statsError } = await supabase
-        .rpc('get_dashboard_stats')
-
-      if (statsError) {
-        console.log('新统计函数不可用，使用备用方法:', statsError)
+      // 统一使用stats-trends API获取所有统计数据，确保一致性
+      const trendsResponse = await fetch('/api/stats-trends')
+      const trendsData = await trendsResponse.json()
+      
+      if (trendsData.success) {
+        // 尝试获取额外的分布数据
+        const { data: statsData, error: statsError } = await supabase
+          .rpc('get_dashboard_stats')
         
-        // 备用方案：使用原来的方法
+        setStats({
+          total_keys: trendsData.trends.total_keys.value,
+          today_count: trendsData.trends.today_count.value,
+          week_count: trendsData.trends.week_count.value,
+          high_severity: trendsData.trends.high_severity.value,
+          verified_keys: 0, // 需要单独查询
+          key_type_distribution: statsData?.[0]?.key_type_distribution || {},
+          severity_distribution: statsData?.[0]?.severity_distribution || {},
+          status_distribution: statsData?.[0]?.status_distribution || {}
+        })
+        
+        console.log('✅ 使用统一的stats-trends数据源:', {
+          total: trendsData.trends.total_keys.value,
+          today: trendsData.trends.today_count.value,
+          week: trendsData.trends.week_count.value,
+          high: trendsData.trends.high_severity.value
+        })
+      } else {
+        console.error('Stats-trends API失败，使用备用方案')
+        
+        // 备用方案：直接查询数据库
         const { data: fallbackStats } = await supabase
           .from('stats_summary')
           .select('*')
           .single()
         
         setStats(fallbackStats)
-      } else if (statsData && statsData.length > 0) {
-        // 转换新统计数据格式
-        const stats = statsData[0]
-        setStats({
-          total_keys: stats.total_keys,
-          today_keys: stats.today_keys,
-          high_severity: stats.high_severity_keys,
-          verified_keys: stats.verified_keys,
-          key_type_distribution: stats.key_type_distribution,
-          severity_distribution: stats.severity_distribution,
-          status_distribution: stats.status_distribution
-        })
       }
 
       // 尝试使用新的最新密钥函数

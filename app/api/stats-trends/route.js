@@ -10,31 +10,35 @@ export async function GET() {
   try {
     console.log('Calculating stats trends...')
 
-    // 获取当前时间点
+    // 获取当前时间点 - 使用UTC时间确保一致性
     const now = new Date()
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
     const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000)
     const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000)
     const twoWeeksAgo = new Date(today.getTime() - 14 * 24 * 60 * 60 * 1000)
+    
+    console.log('时间范围:', {
+      today: today.toISOString(),
+      yesterday: yesterday.toISOString(), 
+      weekAgo: weekAgo.toISOString(),
+      twoWeeksAgo: twoWeeksAgo.toISOString()
+    })
 
-    // 获取所有密钥数据 - 使用更高的限制避免默认1000行限制
-    const { data: allKeys, error } = await supabase
+    // 获取所有密钥数据 - 使用正确的时间字段first_seen
+    const { data: allKeys, error, count } = await supabase
       .from('leaked_keys')
-      .select('created_at, severity')
-      .limit(100000) // 设置足够高的限制
+      .select('first_seen, severity', { count: 'exact' })
 
     if (error) {
       throw new Error('获取密钥数据失败: ' + error.message)
     }
 
-    // 如果接近限制，发出警告
-    if (allKeys && allKeys.length >= 100000) {
-      console.warn('⚠️ Stats-trends query hit limit! May be incomplete data. Total retrieved:', allKeys.length)
-    }
-
+    // 记录查询结果
+    console.log(`✅ Retrieved ${allKeys?.length || 0} keys from database (total count: ${count})`)
+    
     // 按时间分组统计
     const stats = {
-      total: allKeys.length,
+      total: count || allKeys?.length || 0, // 使用准确的总数
       today: 0,
       yesterday: 0,
       thisWeek: 0,
@@ -44,7 +48,7 @@ export async function GET() {
     }
 
     allKeys.forEach(key => {
-      const keyDate = new Date(key.created_at)
+      const keyDate = new Date(key.first_seen)
       
       // 今日统计
       if (keyDate >= today) {
@@ -103,11 +107,8 @@ export async function GET() {
       }
     }
 
-    // 计算总数趋势（本周 vs 上周的密钥总增长）
-    const totalThisWeek = allKeys.filter(key => new Date(key.created_at) >= weekAgo).length
-    const totalLastWeek = allKeys.filter(key => new Date(key.created_at) >= twoWeeksAgo && new Date(key.created_at) < weekAgo).length
-    const totalTrend = calculateTrend(totalThisWeek, totalLastWeek)
-    
+    // 使用已计算的数据，避免重复计算
+    const totalTrend = calculateTrend(stats.thisWeek, stats.lastWeek)
     const todayTrend = calculateTrend(stats.today, stats.yesterday)
     const weekTrend = calculateTrend(stats.thisWeek, stats.lastWeek)
     const highSeverityTrend = calculateTrend(stats.highSeverity, stats.highSeverityLastWeek)
@@ -134,8 +135,8 @@ export async function GET() {
         yesterday: stats.yesterday,
         lastWeek: stats.lastWeek,
         highSeverityLastWeek: stats.highSeverityLastWeek,
-        totalThisWeek: totalThisWeek,
-        totalLastWeek: totalLastWeek
+        totalThisWeek: stats.thisWeek, // 使用已计算的thisWeek
+        totalLastWeek: stats.lastWeek   // 使用已计算的lastWeek
       }
     }
 

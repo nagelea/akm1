@@ -11,13 +11,20 @@ import BulkKeyImport from './BulkKeyImport'
 export default function AdminDashboard({ user }) {
   const [activeTab, setActiveTab] = useState('keys')
   const [stats, setStats] = useState(null)
+  const [statsLoading, setStatsLoading] = useState(false)
 
   useEffect(() => {
     fetchStats()
   }, [])
 
   const fetchStats = async () => {
+    if (statsLoading) {
+      console.log('Stats already loading, skipping...')
+      return
+    }
+
     try {
+      setStatsLoading(true)
       console.log('Refreshing stats...')
       
       // 尝试使用新的统计函数
@@ -61,12 +68,6 @@ export default function AdminDashboard({ user }) {
         }
         
         console.log('✅ 使用新统计函数:', formattedStats)
-        console.log('详细分布:', {
-          key_types: stats.key_type_distribution,
-          severities: stats.severity_distribution,
-          statuses: stats.status_distribution
-        })
-        
         setStats(formattedStats)
       }
     } catch (error) {
@@ -78,7 +79,7 @@ export default function AdminDashboard({ user }) {
         const { data } = await supabase
           .from('leaked_keys')
           .select('id, severity, confidence, status, created_at')
-          .limit(50000)
+          .limit(10000) // 减少限制以提高性能
         
         if (data) {
           const today = new Date().toDateString()
@@ -94,7 +95,16 @@ export default function AdminDashboard({ user }) {
         }
       } catch (fallbackError) {
         console.error('所有统计方法都失败了:', fallbackError)
+        // 设置默认值避免界面崩溃
+        setStats({
+          total: 0,
+          today: 0,
+          high_severity: 0,
+          verified: 0
+        })
       }
+    } finally {
+      setStatsLoading(false)
     }
   }
 

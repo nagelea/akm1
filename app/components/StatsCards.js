@@ -50,7 +50,7 @@ export default function StatsCards({ stats }) {
       change: trends?.week_count?.trend?.change || '0%',
       changeType: trends?.week_count?.trend?.type || 'neutral', 
       icon: '📊',
-      description: '最近7天发现的密钥总数' + (trends?.details?.lastWeek !== undefined ? ` (上周: ${trends.details.lastWeek})` : '')
+      description: '最近7天发现的密钥总数' + (trends?.details?.lastWeek !== undefined ? ` (前7天: ${trends.details.lastWeek})` : '')
     },
     {
       title: '高危警报',

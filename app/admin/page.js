@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import supabase from '../../lib/supabase'
 import AdminLogin from './components/AdminLogin'
 import AdminDashboard from './components/AdminDashboard'
@@ -11,22 +11,49 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [retryCount, setRetryCount] = useState(0)
-  const [initialCheckComplete, setInitialCheckComplete] = useState(false)
+  const initializedRef = useRef(false)
+  const authCheckingRef = useRef(false)
 
   // 重置错误状态的函数
-  const resetError = () => {
+  const resetError = useCallback(() => {
     setError(null)
     setLoading(true)
-  }
+  }, [])
+
+  // 检查管理员权限
+  const checkAdminPermission = useCallback(async (sessionUser) => {
+    const { data: adminUser, error: adminError } = await supabase
+      .from('admin_users')
+      .select('*')
+      .eq('email', sessionUser.email)
+      .single()
+    
+    if (adminError) {
+      if (adminError.code === 'PGRST116') {
+        throw new Error('该账户不是管理员账户')
+      } else {
+        throw new Error('管理员验证失败: ' + adminError.message)
+      }
+    }
+    
+    return adminUser
+  }, [])
 
   // 检查认证状态的函数
-  const checkAuth = async () => {
+  const checkAuth = useCallback(async (skipLoading = false) => {
+    if (authCheckingRef.current) {
+      console.log('Auth check already in progress, skipping...')
+      return
+    }
+
     try {
-      console.log('Checking auth... (attempt:', retryCount + 1, ')')
+      authCheckingRef.current = true
+      console.log('Checking auth...')
       
-      // 重置状态
-      setError(null)
-      setLoading(true)
+      if (!skipLoading) {
+        setError(null)
+        setLoading(true)
+      }
       
       const { data: { session }, error: sessionError } = await supabase.auth.getSession()
       
@@ -39,26 +66,12 @@ export default function AdminPage() {
         console.log('User found:', session.user.email)
         
         // 验证是否为管理员
-        const { data: adminUser, error: adminError } = await supabase
-          .from('admin_users')
-          .select('*')
-          .eq('email', session.user.email)
-          .single()
-        
-        if (adminError) {
-          console.error('Admin check error:', adminError)
-          // 如果是数据未找到错误，提供更友好的提示
-          if (adminError.code === 'PGRST116') {
-            throw new Error('该账户不是管理员账户')
-          } else {
-            throw new Error('管理员验证失败: ' + adminError.message)
-          }
-        }
+        const adminUser = await checkAdminPermission(session.user)
         
         if (adminUser) {
           console.log('Admin user found:', adminUser)
           setUser({ ...session.user, role: adminUser.role })
-          setError(null) // 确保清除错误状态
+          setError(null)
         }
       } else {
         console.log('No session found - showing login form')
@@ -71,72 +84,67 @@ export default function AdminPage() {
       setUser(null)
     } finally {
       setLoading(false)
-      setInitialCheckComplete(true)
+      authCheckingRef.current = false
     }
-  }
+  }, [checkAdminPermission])
 
   useEffect(() => {
-    // 设置超时处理
-    const timeout = setTimeout(() => {
-      if (loading) {
-        setError('加载超时，请检查网络连接')
-        setLoading(false)
-      }
-    }, 8000) // 减少到8秒超时
+    if (initializedRef.current) return
 
-    checkAuth()
+    let timeoutId = null
+    let subscription = null
 
-    // 监听认证状态变化
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('Auth state changed:', event)
-        
-        // 只有在初始检查完成后才处理状态变化
-        if (!initialCheckComplete) {
-          console.log('Ignoring auth state change - initial check not complete')
-          return
+    const initializeAuth = async () => {
+      // 设置超时处理
+      timeoutId = setTimeout(() => {
+        if (loading && !authCheckingRef.current) {
+          setError('加载超时，请检查网络连接')
+          setLoading(false)
         }
-        
-        if (event === 'SIGNED_OUT') {
-          setUser(null)
-          setError(null)
-        } else if (event === 'SIGNED_IN' && session?.user) {
-          // 添加延迟以改善用户体验
-          setTimeout(async () => {
-            setLoading(true)
+      }, 15000) // 增加到15秒超时
+
+      await checkAuth()
+
+      // 监听认证状态变化 - 简化逻辑
+      const { data: authData } = supabase.auth.onAuthStateChange(
+        async (event, session) => {
+          console.log('Auth state changed:', event)
+          
+          // 避免初始化时的重复调用
+          if (!initializedRef.current) {
+            return
+          }
+          
+          if (event === 'SIGNED_OUT') {
+            setUser(null)
             setError(null)
-            
+            setLoading(false)
+          } else if (event === 'SIGNED_IN' && session?.user) {
+            // 简化登录后的处理
             try {
-              const { data: adminUser, error: adminError } = await supabase
-                .from('admin_users')
-                .select('*')
-                .eq('email', session.user.email)
-                .single()
-              
-              if (adminError) {
-                if (adminError.code === 'PGRST116') {
-                  setError('该账户不是管理员账户')
-                } else {
-                  setError('管理员验证失败: ' + adminError.message)
-                }
-              } else if (adminUser) {
-                setUser({ ...session.user, role: adminUser.role })
-              }
+              const adminUser = await checkAdminPermission(session.user)
+              setUser({ ...session.user, role: adminUser.role })
+              setError(null)
             } catch (error) {
-              setError('验证过程发生错误: ' + error.message)
-            } finally {
-              setLoading(false)
+              setError(error.message)
+              setUser(null)
             }
-          }, 800) // 延迟800ms
+            setLoading(false)
+          }
         }
-      }
-    )
+      )
+      
+      subscription = authData.subscription
+      initializedRef.current = true
+    }
+
+    initializeAuth()
 
     return () => {
-      clearTimeout(timeout)
-      subscription.unsubscribe()
+      if (timeoutId) clearTimeout(timeoutId)
+      if (subscription) subscription.unsubscribe()
     }
-  }, [retryCount, initialCheckComplete]) // 依赖retryCount和initialCheckComplete
+  }, [checkAuth, checkAdminPermission]) // 移除retryCount依赖
 
   if (loading) {
     return (
@@ -163,7 +171,9 @@ export default function AdminPage() {
               <button 
                 onClick={() => {
                   setRetryCount(prev => prev + 1)
+                  initializedRef.current = false
                   resetError()
+                  checkAuth()
                 }}
                 className="w-full px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
               >
