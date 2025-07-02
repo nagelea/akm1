@@ -57,7 +57,7 @@ jobs:
               // 获取最近24小时的发现
               const { data: recentKeys, error: keysError } = await supabase
                 .from('leaked_keys')
-                .select('service, source_type, severity, confidence, created_at')
+                .select('key_type, source_type, severity, confidence, created_at')
                 .gte('created_at', new Date(Date.now() - 24*60*60*1000).toISOString())
                 .order('created_at', { ascending: false });
               
@@ -83,7 +83,7 @@ jobs:
                 
                 // 按服务分组
                 const byService = recentKeys.reduce((acc, key) => {
-                  acc[key.service] = (acc[key.service] || 0) + 1;
+                  acc[key.key_type] = (acc[key.key_type] || 0) + 1;
                   return acc;
                 }, {});
                 
@@ -164,7 +164,7 @@ jobs:
               // 总体统计
               const { data: totalStats, error: totalError } = await supabase
                 .from('leaked_keys')
-                .select('service, created_at')
+                .select('key_type, created_at')
                 .gte('created_at', new Date(Date.now() - 30*24*60*60*1000).toISOString());
               
               if (!totalError) {
@@ -172,7 +172,7 @@ jobs:
                 console.log(`   🔑 Total Keys Found: ${totalStats.length}`);
                 console.log(`   📅 Daily Average: ${(totalStats.length / 30).toFixed(1)} keys/day`);
                 
-                const uniqueServices = new Set(totalStats.map(k => k.service)).size;
+                const uniqueServices = new Set(totalStats.map(k => k.key_type)).size;
                 console.log(`   🤖 Services Monitored: ${uniqueServices}`);
               }
               
@@ -210,7 +210,7 @@ jobs:
               // 检查最近1小时的高危发现
               const { data: criticalKeys, error } = await supabase
                 .from('leaked_keys')
-                .select('service, key_partial, source_url, created_at')
+                .select('key_type, key_preview, repo_name, created_at')
                 .eq('severity', 'high')
                 .gte('created_at', new Date(Date.now() - 60*60*1000).toISOString());
               
@@ -219,7 +219,7 @@ jobs:
               if (criticalKeys.length > 0) {
                 console.log('🚨 CRITICAL ALERT: High severity keys found!');
                 console.log(`   Count: ${criticalKeys.length}`);
-                console.log('   Services affected:', [...new Set(criticalKeys.map(k => k.service))].join(', '));
+                console.log('   Services affected:', [...new Set(criticalKeys.map(k => k.key_type))].join(', '));
                 console.log('   Immediate action recommended!');
                 
                 // 在实际环境中，这里可以发送通知到Slack/Discord/Email
