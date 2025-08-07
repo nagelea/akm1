@@ -106,7 +106,7 @@
   ],
   "regex_pattern": "sk-ant-(?:oat01|ort01)-[a-zA-Z0-9_-]{95,200}(?![a-zA-Z0-9_-])",
   "confidence": "high", 
-  "enabled": false,
+  "enabled": true,
   "description": "Detects Claude/Anthropic API keys including access tokens and refresh tokens",
   "examples": [
     "sk-ant-api03-xxxxx",
